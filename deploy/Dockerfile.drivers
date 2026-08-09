@@ -1,0 +1,86 @@
+FROM openeuler/openeuler:24.03-lts-sp4
+
+SHELL ["/bin/bash", "-o", "pipefail", "-c"]
+
+ARG BUILD_JOBS=1
+ARG LIBREALSENSE_REF=v2.55.1
+ARG REALSENSE_ROS_REF=2.3.2
+ARG REALSENSE_FORCE_RSUSB_BACKEND=ON
+ARG LIVOX_ROS_DRIVER_REF=3d240d5
+ARG LIVOX_SDK_REF=9306596
+ARG DDYNAMIC_RECONFIGURE_REF=0.3.2
+
+ENV LANG=C.UTF-8 \
+    LC_ALL=C.UTF-8 \
+    ROS_DISTRO=noetic \
+    ROS_MASTER_URI=http://127.0.0.1:11311 \
+    ROS_HOSTNAME=127.0.0.1
+
+COPY deploy/scripts/install-openeuler-ros.sh /tmp/install-openeuler-ros
+RUN --mount=type=cache,target=/var/cache/dnf,sharing=locked \
+    chmod +x /tmp/install-openeuler-ros \
+    && /tmp/install-openeuler-ros \
+    && rm -f /tmp/install-openeuler-ros
+
+# RSUSB avoids relying on Ubuntu-specific UVC kernel patches. Set the build arg
+# to OFF only after confirming the Orange Pi host kernel has the required patches.
+RUN mkdir -p /tmp/librealsense \
+    && curl -fL --retry 5 --retry-all-errors \
+         "https://github.com/IntelRealSense/librealsense/archive/refs/tags/${LIBREALSENSE_REF}.tar.gz" \
+       | tar -xz --strip-components=1 -C /tmp/librealsense \
+    && cmake -S /tmp/librealsense -B /tmp/librealsense/build \
+         -DCMAKE_BUILD_TYPE=Release \
+         -DBUILD_EXAMPLES=OFF \
+         -DBUILD_GRAPHICAL_EXAMPLES=OFF \
+         -DBUILD_PYTHON_BINDINGS=OFF \
+         -DBUILD_UNIT_TESTS=OFF \
+         -DBUILD_WITH_TM2=OFF \
+         -DFORCE_RSUSB_BACKEND="${REALSENSE_FORCE_RSUSB_BACKEND}" \
+    && cmake --build /tmp/librealsense/build --parallel "${BUILD_JOBS}" \
+    && cmake --install /tmp/librealsense/build \
+    && ldconfig \
+    && install -D -m 0644 \
+         /tmp/librealsense/config/99-realsense-libusb.rules \
+         /etc/udev/rules.d/99-realsense-libusb.rules \
+    && rm -rf /tmp/librealsense
+
+RUN echo '/usr/local/lib64' > /etc/ld.so.conf.d/local-lib64.conf \
+    && ldconfig
+
+COPY patches/livox-sdk-gcc12.patch /tmp/livox-sdk.patch
+RUN git clone https://github.com/Livox-SDK/Livox-SDK.git /tmp/Livox-SDK \
+    && git -C /tmp/Livox-SDK checkout "${LIVOX_SDK_REF}" \
+    && git -C /tmp/Livox-SDK apply --ignore-space-change /tmp/livox-sdk.patch \
+    && cmake -S /tmp/Livox-SDK -B /tmp/Livox-SDK/build \
+         -DCMAKE_BUILD_TYPE=Release \
+    && cmake --build /tmp/Livox-SDK/build \
+         --target livox_sdk_static --parallel "${BUILD_JOBS}" \
+    && cmake --install /tmp/Livox-SDK/build \
+    && rm -rf /tmp/Livox-SDK /tmp/livox-sdk.patch
+
+RUN mkdir -p /opt/drivers_ws/src \
+    && git clone --depth 1 --branch "${DDYNAMIC_RECONFIGURE_REF}" \
+         https://github.com/pal-robotics/ddynamic_reconfigure.git \
+         /opt/drivers_ws/src/ddynamic_reconfigure \
+    && git clone https://github.com/IntelRealSense/realsense-ros.git /opt/drivers_ws/src/realsense-ros \
+    && git -C /opt/drivers_ws/src/realsense-ros checkout "${REALSENSE_ROS_REF}" \
+    && git clone https://github.com/Livox-SDK/livox_ros_driver.git /opt/drivers_ws/src/livox_ros_driver \
+    && git -C /opt/drivers_ws/src/livox_ros_driver checkout "${LIVOX_ROS_DRIVER_REF}"
+
+COPY patches/livox_ros_driver-nosync-system-time.patch /tmp/livox-nosync.patch
+
+RUN git -C /opt/drivers_ws/src/livox_ros_driver apply --ignore-space-change /tmp/livox-nosync.patch \
+    && rm -f /tmp/livox-nosync.patch \
+    && ln -s /opt/ros/noetic/share/catkin/cmake/toplevel.cmake /opt/drivers_ws/src/CMakeLists.txt \
+    && source /opt/ros/noetic/setup.bash \
+    && cd /opt/drivers_ws \
+    && catkin_make -j "${BUILD_JOBS}" -l "${BUILD_JOBS}" \
+         -DCMAKE_BUILD_TYPE=Release \
+         -DCATKIN_ENABLE_TESTING=OFF \
+         -DCMAKE_PREFIX_PATH=/opt/ros/noetic \
+    && rm -rf /opt/drivers_ws/build
+
+COPY deploy/scripts/drivers-entrypoint.sh /usr/local/bin/drivers-entrypoint
+RUN chmod +x /usr/local/bin/drivers-entrypoint
+
+ENTRYPOINT ["/usr/local/bin/drivers-entrypoint"]

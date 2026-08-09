@@ -1,0 +1,38 @@
+# macOS and local tooling
+.DS_Store
+**/.DS_Store
+.agents/
+.claude/
+.codex/
+.idea/
+.vscode/
+
+# Local configuration and secrets
+.env
+.env.*
+!.env.example
+!**/.env.example
+
+# Build and runtime output
+build/
+devel/
+install/
+dist/
+logs/
+bags/
+backups/
+**/__pycache__/
+*.py[cod]
+*.bag
+*.log
+
+# Large local-only source and simulation trees
+FAST-Calib/
+simulation/
+FAST-LIVO2_PX4-1.13_XTDrone_Gazebo/
+
+# Archives and editor leftovers
+*.zip
+*~
+daib_devel_*.tar.gz
+tmp.md

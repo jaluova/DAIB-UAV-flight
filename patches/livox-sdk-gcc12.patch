@@ -1,0 +1,10 @@
+diff --git a/sdk_core/src/base/thread_base.h b/sdk_core/src/base/thread_base.h
+--- a/sdk_core/src/base/thread_base.h
++++ b/sdk_core/src/base/thread_base.h
+@@ -24,5 +24,6 @@
+ #ifndef LIVOX_THREAD_BASE_H_
+ #define LIVOX_THREAD_BASE_H_
+ #include <atomic>
+ #include <thread>
++#include <memory>
+ #include "noncopyable.h"

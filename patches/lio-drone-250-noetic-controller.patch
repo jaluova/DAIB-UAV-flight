@@ -1,0 +1,57 @@
+diff --git a/src/controller/geometric_controller/CMakeLists.txt b/src/controller/geometric_controller/CMakeLists.txt
+index 00ce78d..f47d578 100644
+--- a/src/controller/geometric_controller/CMakeLists.txt
++++ b/src/controller/geometric_controller/CMakeLists.txt
+@@ -6,12 +6,20 @@ add_definitions(-std=c++11)
+ find_package(catkin REQUIRED COMPONENTS
++  controller_msgs
++  geometry_msgs
++  nav_msgs
+   roscpp
+   rospy
+   dynamic_reconfigure
++  sensor_msgs
++  std_msgs
++  std_srvs
++  trajectory_msgs
+   tf
+   mavros
+   mavros_extras
+   mavros_msgs
+   mavlink
++  quadrotor_msgs
+ )
+ 
+ generate_dynamic_reconfigure_options(
+@@ -21,7 +29,7 @@ generate_dynamic_reconfigure_options(
+ catkin_package(
+   INCLUDE_DIRS include
+   LIBRARIES geometric_controller
+-  CATKIN_DEPENDS roscpp rospy std_msgs mavros_msgs geometry_msgs sensor_msgs tf
++  CATKIN_DEPENDS controller_msgs geometry_msgs nav_msgs roscpp rospy std_msgs std_srvs mavros_msgs quadrotor_msgs sensor_msgs tf trajectory_msgs
+ )
+ 
+ #############
+diff --git a/src/controller/geometric_controller/package.xml b/src/controller/geometric_controller/package.xml
+index d7d2f50..3e2e741 100644
+--- a/src/controller/geometric_controller/package.xml
++++ b/src/controller/geometric_controller/package.xml
+@@ -21,6 +21,9 @@
+   <build_depend>mavros_msgs</build_depend>
+   <build_depend>mavros_extras</build_depend>
+   <build_depend> eigen_catkin</build_depend>
++  <build_depend>quadrotor_msgs</build_depend>
++  <build_depend>std_srvs</build_depend>
++  <build_depend>trajectory_msgs</build_depend>
+   <run_depend>dynamic_reconfigure</run_depend>
+   <run_depend>roscpp</run_depend>
+   <run_depend>rospy</run_depend>
+@@ -35,5 +38,8 @@
+   <run_depend>mavros_extras</run_depend>
+   <run_depend>mavros_msgs</run_depend>
++  <run_depend>quadrotor_msgs</run_depend>
++  <run_depend>std_srvs</run_depend>
++  <run_depend>trajectory_msgs</run_depend>
+ 
+ 
+   <!-- The export tag contains other, unspecified, tags -->

@@ -1,0 +1,223 @@
+diff --git a/src/controller/geometric_controller/include/geometric_controller/geometric_controller.h b/src/controller/geometric_controller/include/geometric_controller/geometric_controller.h
+index a68127d..0bac036 100644
+--- a/src/controller/geometric_controller/include/geometric_controller/geometric_controller.h
++++ b/src/controller/geometric_controller/include/geometric_controller/geometric_controller.h
+@@ -80,6 +80,7 @@ private:
+   ros::Time last_request_, reference_request_now_, reference_request_last_;
+ 
+   ros::Time cmdpos_time_last_;
++  ros::WallTime cmdpos_wall_time_last_;
+   double dtttt;
+ 
+   string mav_name_;
+@@ -93,6 +94,8 @@ private:
+   double attctrl_tau_;
+   double norm_thrust_const_, norm_thrust_offset_;
+   double max_fb_acc_;
++  double command_timeout_s_;
++  double target_yaw_rate_;
+   double dx_, dy_, dz_;
+ 
+   mavros_msgs::State current_state_;
+@@ -201,6 +204,7 @@ private:
+   };
+   geometry_msgs::Pose home_pose_;
+   bool received_home_pose;
++  bool position_command_received_;
+ 
+ public:
+   void dynamicReconfigureCallback(
+diff --git a/src/controller/geometric_controller/src/geometric_controller.cpp b/src/controller/geometric_controller/src/geometric_controller.cpp
+index 2720479..91c53ca 100644
+--- a/src/controller/geometric_controller/src/geometric_controller.cpp
++++ b/src/controller/geometric_controller/src/geometric_controller.cpp
+@@ -2,6 +2,8 @@
+ 
+ #include "geometric_controller/geometric_controller.h"
+ 
++#include <cmath>
++
+ using namespace Eigen;
+ using namespace std;
+ // Constructor
+@@ -9,7 +11,8 @@ geometricCtrl::geometricCtrl(const ros::NodeHandle &nh,
+                              const ros::NodeHandle &nh_private)
+     : nh_(nh), nh_private_(nh_private), fail_detec_(false), ctrl_enable_(true),
+       landing_commanded_(false), feedthrough_enable_(false),
+-      node_state(WAITING_FOR_HOME_POSE) {
++      node_state(WAITING_FOR_HOME_POSE), received_home_pose(false),
++      position_command_received_(false) {
+   referenceSub_ =
+       nh_.subscribe("reference/setpoint", 1, &geometricCtrl::targetCallback,
+                     this, ros::TransportHints().tcpNoDelay());
+@@ -71,9 +74,11 @@ geometricCtrl::geometricCtrl(const ros::NodeHandle &nh,
+   last_request_ = ros::Time::now();
+   nh_private_.param<string>("mavname", mav_name_, "iris");
+   nh_private_.param<int>("ctrl_mode", ctrl_mode_, ERROR_QUATERNION);
+-  nh_private_.param<bool>("enable_sim", sim_enable_, true);
++  nh_private_.param<bool>("enable_sim", sim_enable_, false);
+   nh_private_.param<bool>("velocity_yaw", velocity_yaw_, false);
+   nh_private_.param<double>("max_acc", max_fb_acc_, 9.0);
++  nh_private_.param<double>("command_timeout_s", command_timeout_s_, 0.2);
++  command_timeout_s_ = std::max(0.02, command_timeout_s_);
+   nh_private_.param<double>("yaw_heading", mavYaw_, 0.0);
+   nh_private_.param<double>("drag_dx", dx_, 0.0);
+   nh_private_.param<double>("drag_dy", dy_, 0.0);
+@@ -99,8 +104,16 @@ geometricCtrl::geometricCtrl(const ros::NodeHandle &nh,
+   targetPos_ << initTargetPos_x_, initTargetPos_y_,
+       initTargetPos_z_; // Initial Position
+   targetVel_ << 0.0, 0.0, 0.0;
++  targetAcc_.setZero();
++  targetJerk_.setZero();
++  targetSnap_.setZero();
+   mavPos_ << 0.0, 0.0, 0.0;
+   mavVel_ << 0.0, 0.0, 0.0;
++  mavRate_.setZero();
++  mavAtt_ << 1.0, 0.0, 0.0, 0.0;
++  cmdBodyRate_.setZero();
++  target_yaw_rate_ = 0.0;
++  dtttt = 0.0;
+   g_ << 0.0, 0.0, -9.8;
+   Kpos_ << -Kpos_x_, -Kpos_y_, -Kpos_z_;
+   Kvel_ << -Kvel_x_, -Kvel_y_, -Kvel_z_;
+@@ -141,6 +154,16 @@ void geometricCtrl::targetCallback(const geometry_msgs::TwistStamped &msg) {
+ 
+ void geometricCtrl::quadmsgCallback(
+     const quadrotor_msgs::PositionCommand::ConstPtr &cmd) {
++  if (!std::isfinite(cmd->position.x) || !std::isfinite(cmd->position.y) ||
++      !std::isfinite(cmd->position.z) || !std::isfinite(cmd->velocity.x) ||
++      !std::isfinite(cmd->velocity.y) || !std::isfinite(cmd->velocity.z) ||
++      !std::isfinite(cmd->acceleration.x) ||
++      !std::isfinite(cmd->acceleration.y) ||
++      !std::isfinite(cmd->acceleration.z) || !std::isfinite(cmd->yaw) ||
++      !std::isfinite(cmd->yaw_dot)) {
++    ROS_ERROR_THROTTLE(1.0, "Reject non-finite PositionCommand.");
++    return;
++  }
+   node_state = MISSION_EXECUTION;
+   reference_request_last_ = reference_request_now_;
+ 
+@@ -149,6 +172,8 @@ void geometricCtrl::quadmsgCallback(
+ 
+   reference_request_now_ = ros::Time::now();
+   cmdpos_time_last_ = reference_request_now_;
++  cmdpos_wall_time_last_ = ros::WallTime::now();
++  position_command_received_ = true;
+ 
+   reference_request_dt_ =
+       (reference_request_now_ - reference_request_last_).toSec();
+@@ -162,7 +187,7 @@ void geometricCtrl::quadmsgCallback(
+   targetJerk_ = Eigen::Vector3d::Zero();
+   targetSnap_ = Eigen::Vector3d::Zero();
+   mavYaw_ = double(cmd->yaw);
+-  // cmdBodyRate_[2] = cmd->yaw_dot;
++  target_yaw_rate_ = double(cmd->yaw_dot);
+ }
+ 
+ void geometricCtrl::flattargetCallback(const controller_msgs::FlatTarget &msg) {
+@@ -245,6 +270,9 @@ void geometricCtrl::ttargetposeCallback(const geometry_msgs::PoseStamped &msg) {
+ }
+ void geometricCtrl::targetexistCallback(const std_msgs::Bool &msg) {
+   if(msg.data == 0){
++    holdTargetPos_x_ = mavPos_(0);
++    holdTargetPos_y_ = mavPos_(1);
++    holdTargetPos_z_ = mavPos_(2);
+     node_state = MISSION_HOLD;
+   }
+ }
+@@ -271,6 +299,9 @@ void geometricCtrl::mavtwistCallback(const geometry_msgs::TwistStamped &msg) {
+ bool geometricCtrl::landCallback(std_srvs::SetBool::Request &request,
+                                  std_srvs::SetBool::Response &response) {
+   node_state = LANDING;
++  response.success = true;
++  response.message = "landing requested";
++  return true;
+ }
+ 
+ void geometricCtrl::cmdloopCallback(const ros::TimerEvent &event) {
+@@ -288,6 +319,7 @@ void geometricCtrl::cmdloopCallback(const ros::TimerEvent &event) {
+     takingoff_msg.pose.position.x = initTargetPos_x_;
+     takingoff_msg.pose.position.y = initTargetPos_y_;
+     takingoff_msg.pose.position.z = initTargetPos_z_;
++    takingoff_msg.pose.orientation.w = 1.0;
+     target_pose_pub_.publish(takingoff_msg);
+     ros::spinOnce();
+     break;
+@@ -296,7 +328,22 @@ void geometricCtrl::cmdloopCallback(const ros::TimerEvent &event) {
+ // cla_distance(const Eigen::Vector3d &target_pos)
+   case MISSION_EXECUTION:
+   {
+-    // dtttt = (ros::Time::now() - cmdpos_time_last_).toSec();
++    const bool command_timed_out =
++        !position_command_received_ ||
++        (ros::WallTime::now() - cmdpos_wall_time_last_).toSec() >
++            command_timeout_s_;
++    if (command_timed_out) {
++      holdTargetPos_x_ = mavPos_(0);
++      holdTargetPos_y_ = mavPos_(1);
++      holdTargetPos_z_ = mavPos_(2);
++      targetVel_.setZero();
++      targetAcc_.setZero();
++      target_yaw_rate_ = 0.0;
++      node_state = MISSION_HOLD;
++      ROS_ERROR_THROTTLE(
++          1.0, "PositionCommand timed out; switching to fixed-position hold.");
++      break;
++    }
+ 
+     // std::cout << "TIME  " << dtttt << std::endl;
+     // // cla_distance(target_mavPos_);
+@@ -312,9 +359,9 @@ void geometricCtrl::cmdloopCallback(const ros::TimerEvent &event) {
+     // }
+     // else
+     // {
+-      std::cout << "                                   missionexection  " << dtttt << std::endl;
+       if (!feedthrough_enable_)
+-      computeBodyRateCmd(cmdBodyRate_, targetPos_, targetVel_, targetAcc_);
++        computeBodyRateCmd(cmdBodyRate_, targetPos_, targetVel_, targetAcc_);
++      cmdBodyRate_(2) += target_yaw_rate_;
+       pubReferencePose(targetPos_, q_des);
+       pubRateCommands(cmdBodyRate_);
+       appendPoseHistory();
+@@ -325,17 +372,13 @@ void geometricCtrl::cmdloopCallback(const ros::TimerEvent &event) {
+   }
+ 
+   case MISSION_HOLD: {
+-    std::cout << "                                   HOLDHOLDHOLD  " << dtttt << std::endl;
+     geometry_msgs::PoseStamped takingoff_msg;
+ 
+-    holdTargetPos_x_ = mavPos_(0);
+-    holdTargetPos_y_ = mavPos_(1);
+-    holdTargetPos_z_ = mavPos_(2);
+-
+     takingoff_msg.header.stamp = ros::Time::now();
+     takingoff_msg.pose.position.x = holdTargetPos_x_;
+     takingoff_msg.pose.position.y = holdTargetPos_y_;
+     takingoff_msg.pose.position.z = holdTargetPos_z_;
++    takingoff_msg.pose.orientation.w = 1.0;
+     // takingoff_msg.pose.orientation.w = mavAtt_(0);
+     // takingoff_msg.pose.orientation.x = mavAtt_(1);
+     // takingoff_msg.pose.orientation.y = mavAtt_(2);
+@@ -515,7 +558,6 @@ void geometricCtrl::computeBodyRateCmd(Eigen::Vector4d &bodyrate_cmd,
+ 
+   const Eigen::Vector3d pos_error = mavPos_ - target_pos;
+   const Eigen::Vector3d vel_error = mavVel_ - target_vel;
+-  std::cout << "the position error is: " << pos_error(2) << std::endl;
+   Eigen::Vector3d a_fb =
+       Kpos_.asDiagonal() * pos_error +
+       Kvel_.asDiagonal() * vel_error; // feedforward term for trajectory error
+@@ -741,6 +783,7 @@ bool geometricCtrl::ctrltriggerCallback(std_srvs::SetBool::Request &req,
+   ctrl_mode_ = mode;
+   res.success = ctrl_mode_;
+   res.message = "controller triggered";
++  return true;
+ }
+ 
+ void geometricCtrl::setBodyRateCommand(Eigen::Vector4d bodyrate_command) {
+@@ -777,5 +820,5 @@ void geometricCtrl::dynamicReconfigureCallback(
+   }
+ 
+   Kpos_ << -Kpos_x_, -Kpos_y_, -Kpos_z_;
+-  Kvel_ << -Kvel_x_, -Kvel_z_, -Kvel_z_;
++  Kvel_ << -Kvel_x_, -Kvel_y_, -Kvel_z_;
+ }

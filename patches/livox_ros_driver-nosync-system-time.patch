@@ -1,0 +1,56 @@
+diff --git a/livox_ros_driver/livox_ros_driver/lddc.cpp b/livox_ros_driver/livox_ros_driver/lddc.cpp
+index ea74a67..d0e4375 100644
+--- a/livox_ros_driver/livox_ros_driver/lddc.cpp
++++ b/livox_ros_driver/livox_ros_driver/lddc.cpp
+@@ -340,10 +340,10 @@ uint32_t Lddc::PublishPclData(LidarDataQueue *queue,
+ 
+   ros::Publisher *p_publisher = Lddc::GetCurrentPublisher(handle);
+   if (kOutputToRos == output_type_) {
+-    p_publisher->publish(cloud);
++    p_publisher->publish(*cloud);
+   } else {
+     if (bag_ && enable_lidar_bag_) {
+       bag_->write(p_publisher->getTopic(), ros::Time(timestamp / 1000000000.0),
+-          cloud);
++          *cloud);
+     }
+   }
+@@ -462,6 +462,27 @@ uint32_t Lddc::PublishCustomPointcloud(LidarDataQueue *queue,
+     ++published_packet;
+   }
+ 
++  if (data_source != kSourceLvxFile && !livox_msg.points.empty()) {
++    const uint64_t scan_duration_ns =
++        livox_msg.points.back().offset_time;
++    const uint64_t publish_time_ns = ros::Time::now().toNSec();
++    const uint64_t raw_timebase_ns = livox_msg.timebase;
++    const uint64_t clock_delta_ns =
++        publish_time_ns > raw_timebase_ns ?
++        publish_time_ns - raw_timebase_ns :
++        raw_timebase_ns - publish_time_ns;
++    const uint64_t epoch_mismatch_threshold_ns = 1000000000ULL;
++
++    if (clock_delta_ns > epoch_mismatch_threshold_ns) {
++      const uint64_t corrected_timebase =
++          publish_time_ns > scan_duration_ns ?
++          publish_time_ns - scan_duration_ns : 0;
++      livox_msg.timebase = corrected_timebase;
++      livox_msg.header.stamp.fromNSec(corrected_timebase);
++      ROS_INFO_ONCE("Non-epoch CustomMsg timestamp mapping v4 enabled");
++    }
++  }
++
+   ros::Publisher *p_publisher = Lddc::GetCurrentPublisher(handle);
+   if (kOutputToRos == output_type_) {
+     p_publisher->publish(livox_msg);
+diff --git a/livox_ros_driver/timesync/timesync.h b/livox_ros_driver/timesync/timesync.h
+--- a/livox_ros_driver/timesync/timesync.h
++++ b/livox_ros_driver/timesync/timesync.h
+@@ -26,6 +26,7 @@
+ #define TIMESYNC_TIMESYNC_H_
+ 
+ #include <thread>
++#include <memory>
+ #include "comm_device.h"
+ #include "comm_protocol.h"
+ #include "user_uart.h"

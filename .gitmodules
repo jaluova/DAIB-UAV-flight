@@ -1,0 +1,9 @@
+[submodule "src/DAIB-LIVO"]
+	path = src/DAIB-LIVO
+	url = https://github.com/jaluova/DAIB-LIVO.git
+[submodule "src/DAIB-Planner"]
+	path = src/DAIB-Planner
+	url = https://github.com/jaluova/DAIB-Planner.git
+[submodule "src/DAIB-Explorer"]
+	path = src/DAIB-Explorer
+	url = https://github.com/jaluova/DAIB-Explorer.git

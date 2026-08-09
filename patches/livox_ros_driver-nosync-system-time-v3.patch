@@ -1,0 +1,25 @@
+diff --git a/livox_ros_driver/livox_ros_driver/lddc.cpp b/livox_ros_driver/livox_ros_driver/lddc.cpp
+index ea74a67..f732622 100644
+--- a/livox_ros_driver/livox_ros_driver/lddc.cpp
++++ b/livox_ros_driver/livox_ros_driver/lddc.cpp
+@@ -462,6 +462,20 @@ uint32_t Lddc::PublishCustomPointcloud(LidarDataQueue *queue,
+     ++published_packet;
+   }
+ 
++  if (data_source != kSourceLvxFile &&
++      lidar->timestamp_type == kTimestampTypeNoSync &&
++      !livox_msg.points.empty()) {
++    const uint64_t scan_duration_ns =
++        livox_msg.points.back().offset_time;
++    const uint64_t publish_time_ns = ros::Time::now().toNSec();
++    const uint64_t corrected_timebase =
++        publish_time_ns > scan_duration_ns ?
++        publish_time_ns - scan_duration_ns : 0;
++    livox_msg.timebase = corrected_timebase;
++    livox_msg.header.stamp.fromNSec(corrected_timebase);
++    ROS_INFO_ONCE("NoSync CustomMsg timestamp mapping v3 enabled");
++  }
++
+   ros::Publisher *p_publisher = Lddc::GetCurrentPublisher(handle);
+   if (kOutputToRos == output_type_) {
+     p_publisher->publish(livox_msg);

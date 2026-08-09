@@ -1,0 +1,120 @@
+FROM openeuler/openeuler:24.03-lts-sp4
+
+SHELL ["/bin/bash", "-o", "pipefail", "-c"]
+
+ARG BUILD_JOBS=1
+ARG SOPHUS_REF=a621ff
+ARG VIKIT_REF=master
+ARG FAST_LIVO_ARM_FLAGS=-march=armv8-a
+
+ENV LANG=C.UTF-8 \
+    LC_ALL=C.UTF-8 \
+    ROS_DISTRO=noetic \
+    ROS_MASTER_URI=http://127.0.0.1:11311 \
+    ROS_HOSTNAME=127.0.0.1
+
+COPY deploy/scripts/install-openeuler-ros.sh /tmp/install-openeuler-ros
+RUN --mount=type=cache,target=/var/cache/dnf,sharing=locked \
+    chmod +x /tmp/install-openeuler-ros \
+    && /tmp/install-openeuler-ros \
+    && rm -f /tmp/install-openeuler-ros
+
+# FAST-LIVO2 uses the pre-template Sophus API. These source edits are required
+# by the GCC version shipped in openEuler 24.03.
+RUN git clone https://github.com/strasdat/Sophus.git /tmp/Sophus \
+    && git -C /tmp/Sophus checkout "${SOPHUS_REF}" \
+    && sed -i 's/unit_complex_\.real() = 1\.;/unit_complex_.real(1.);/' /tmp/Sophus/sophus/so2.cpp \
+    && sed -i 's/unit_complex_\.imag() = 0\.;/unit_complex_.imag(0.);/' /tmp/Sophus/sophus/so2.cpp \
+    && cmake -S /tmp/Sophus -B /tmp/Sophus/build -DCMAKE_BUILD_TYPE=Release \
+    && cmake --build /tmp/Sophus/build --parallel "${BUILD_JOBS}" \
+    && cmake --install /tmp/Sophus/build \
+    && echo '/usr/local/lib' > /etc/ld.so.conf.d/sophus.conf \
+    && ldconfig \
+    && rm -rf /tmp/Sophus
+
+# The legacy a621ff release predates SophusConfig.cmake installation, while
+# FAST-LIVO2 and rpg_vikit both discover Sophus through find_package().
+COPY deploy/cmake/SophusConfig.cmake /usr/local/lib/cmake/Sophus/SophusConfig.cmake
+
+RUN mkdir -p /opt/daib_ws/src \
+    && git clone https://github.com/xuankuzcr/rpg_vikit.git /opt/daib_ws/src/rpg_vikit \
+    && git -C /opt/daib_ws/src/rpg_vikit checkout "${VIKIT_REF}" \
+    && sed -i 's/\bCV_RANSAC\b/cv::RANSAC/g' /opt/daib_ws/src/rpg_vikit/vikit_common/src/homography.cpp \
+    && sed -i 's/\bCV_INTER_LINEAR\b/cv::INTER_LINEAR/g' /opt/daib_ws/src/rpg_vikit/vikit_common/src/pinhole_camera.cpp \
+    && sed -i 's/\bCV_WINDOW_AUTOSIZE\b/cv::WINDOW_AUTOSIZE/g' /opt/daib_ws/src/rpg_vikit/vikit_common/src/img_align.cpp
+
+# Foxglove is built into the algorithm image so the Orange Pi still deploys
+# only the algorithm and driver images. The Livox message-only package lets
+# the bridge describe CustomMsg without pulling the hardware driver into this
+# container.
+ARG FOXGLOVE_BRIDGE_REF=0.8.5
+ARG ROS_BABEL_FISH_REF=0.9.3
+ARG WEBSOCKETPP_REF=0.8.2
+
+RUN --mount=type=cache,target=/var/cache/dnf,sharing=locked \
+    dnf install -y \
+      asio-devel \
+      nlohmann-json-devel \
+      ros-noetic-resource-retriever \
+    && dnf clean all \
+    && python3 -m ensurepip \
+    && python3 -m pip install --no-cache-dir python-gnupg
+
+RUN git clone --depth 1 --branch "${WEBSOCKETPP_REF}" \
+      https://github.com/zaphoyd/websocketpp.git /tmp/websocketpp \
+    && cmake -S /tmp/websocketpp -B /tmp/websocketpp/build \
+      -DCMAKE_BUILD_TYPE=Release \
+      -DCMAKE_INSTALL_PREFIX=/usr/local \
+      -DBUILD_EXAMPLES=OFF \
+      -DBUILD_TESTS=OFF \
+    && cmake --install /tmp/websocketpp/build \
+    && rm -rf /tmp/websocketpp
+
+RUN mkdir -p /opt/foxglove_ws/src \
+    && git clone --depth 1 --branch "${ROS_BABEL_FISH_REF}" \
+      https://github.com/StefanFabian/ros_babel_fish.git \
+      /opt/foxglove_ws/src/ros_babel_fish \
+    && sed -i '/_action_client/d' \
+      /opt/foxglove_ws/src/ros_babel_fish/ros_babel_fish/CMakeLists.txt \
+    && touch /opt/foxglove_ws/src/ros_babel_fish/ros_babel_fish_test_msgs/CATKIN_IGNORE \
+    && git clone --depth 1 --branch "${FOXGLOVE_BRIDGE_REF}" \
+      https://github.com/foxglove/ros-foxglove-bridge.git \
+      /opt/foxglove_ws/src/foxglove_bridge
+
+COPY deploy/ros/livox_ros_driver /opt/foxglove_ws/src/livox_ros_driver
+
+RUN --mount=type=cache,target=/opt/foxglove_ws/build,sharing=locked \
+    source /opt/ros/noetic/setup.bash \
+    && cd /opt/foxglove_ws \
+    && catkin_make -j "${BUILD_JOBS}" -l "${BUILD_JOBS}" \
+      -DCATKIN_ENABLE_TESTING=OFF \
+      -DCMAKE_BUILD_TYPE=Release \
+      -DCMAKE_CXX_FLAGS=-DBOOST_BIND_GLOBAL_PLACEHOLDERS \
+      -DCMAKE_PREFIX_PATH=/opt/ros/noetic
+
+# Keep application sources after the fixed Foxglove toolchain so changing an
+# algorithm package does not invalidate the independent Foxglove build layers.
+COPY src/DAIB-LIVO /opt/daib_ws/src/fast_livo
+COPY src/DAIB-Planner/src/planner /opt/daib_ws/src/ego_planner_packages
+COPY src/DAIB-Planner/src/uav_simulator/Utils/quadrotor_msgs /opt/daib_ws/src/quadrotor_msgs
+COPY src/DAIB-Explorer /opt/daib_ws/src/daib_explorer
+
+# These packages are not part of the real-device single-UAV runtime.
+RUN --mount=type=cache,target=/opt/daib_ws/build,sharing=locked \
+    touch \
+      /opt/daib_ws/src/ego_planner_packages/drone_detect/CATKIN_IGNORE \
+      /opt/daib_ws/src/ego_planner_packages/rosmsg_tcp_bridge/CATKIN_IGNORE \
+    && ln -s /opt/ros/noetic/share/catkin/cmake/toplevel.cmake /opt/daib_ws/src/CMakeLists.txt \
+    && source /opt/ros/noetic/setup.bash \
+    && cd /opt/daib_ws \
+    && catkin_make -j "${BUILD_JOBS}" -l "${BUILD_JOBS}" \
+         -DCMAKE_BUILD_TYPE=Release \
+         -DCATKIN_ENABLE_TESTING=OFF \
+         -DCMAKE_PREFIX_PATH=/opt/ros/noetic \
+         -DSophus_DIR=/usr/local/lib/cmake/Sophus \
+         "-DFAST_LIVO_ARM_FLAGS=${FAST_LIVO_ARM_FLAGS}"
+
+COPY deploy/scripts/algorithm-entrypoint.sh /usr/local/bin/algorithm-entrypoint
+RUN chmod +x /usr/local/bin/algorithm-entrypoint
+
+ENTRYPOINT ["/usr/local/bin/algorithm-entrypoint"]
