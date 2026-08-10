@@ -138,9 +138,8 @@ Docker 29 可以直接加载 `.tar.zst`。已有的相同镜像层会在 Docker 
 | 持久化卷 | `daib-registry-data` |
 | 重启策略 | `unless-stopped` |
 | 当前仓库 | `daib-algorithm` |
-| 当前标签 | `openeuler-arm64` |
-| 当前 manifest digest | `sha256:d6063d42dc656da29bd5156ce826f934c2c6aba75a10632fb987097f66e161bc` |
-| 当前存储占用 | 约 788.7 MiB |
+| 当前标签 | `openeuler-arm64`、`yyy-openeuler-arm64` |
+| YYY manifest digest | `sha256:42e1f92c9ff965660f489dac4c8fa0cd625bdb1653bc79b9cc167c5efdafc762` |
 
 使用 `5050` 而不是默认的 `5000`，因为 macOS ControlCenter/AirPlay 已监听
 `5000`。本机和局域网地址的 `/v2/` 均已返回 `{}`，镜像首次 push 成功，
@@ -179,8 +178,10 @@ ALGORITHM_IMAGE=192.168.218.119:5050/daib-algorithm:openeuler-arm64
 ```
 
 Registry 为可信局域网内的 HTTP 服务，不应暴露到公网。Mac 地址应通过
-DHCP 保留保持稳定。板卡当时不在线，因此从板卡访问、pull 和 Compose
-重建尚未完成端到端验证。
+DHCP 保留保持稳定。2026-08-10 已从板卡增量拉取 `yyy-openeuler-arm64`，
+仅重建算法服务，并确认容器为 `healthy`、`restart_count=0`。镜像中的
+`mapping_mid70_d435i.launch` 使用 `/livox/lidar` 和 `/camera/imu`，修复了
+纯 YYY 源码镜像缺少板端传感器 launch 导致的启动失败。
 
 首次下载 `registry:2` 时，终端的 `https_proxy=localhost:7897` 不能单独
 影响 Docker daemon。启用 macOS 系统 HTTP/HTTPS 代理
@@ -202,11 +203,9 @@ docker compose --env-file deploy/.env \
 
 ## 后续待办
 
-1. 板卡上线后配置 `192.168.218.119:5050` 为 insecure registry，验证增量
-   pull，并确认 Compose 能使用 Registry 镜像正常启动。
-2. 接入 Livox，确认 `enP3p49s0` 的实际 CIDR，再决定是否启用自动配网。
-3. 接入 D435i，确认 USB 3.0 枚举、权限、图像和 IMU 数据。
-4. 使用 `/mnt/ssd/bags` 中的测试 bag 回归 FAST-LIVO 和 Foxglove。
-5. 使用 Foxglove 的 `camera_init` Fixed Frame 检查点云；暂不发布 `view`
+1. 接入 Livox，确认 `enP3p49s0` 的实际 CIDR，再决定是否启用自动配网。
+2. 接入 D435i，确认 USB 3.0 枚举、权限、图像和 IMU 数据。
+3. 使用 `/mnt/ssd/bags` 中的测试 bag 回归 FAST-LIVO 和 Foxglove。
+4. 使用 Foxglove 的 `camera_init` Fixed Frame 检查点云；暂不发布 `view`
    坐标变换。
-6. 验证传感器时间同步、标定参数、散热和长时间运行稳定性。
+5. 验证传感器时间同步、标定参数、散热和长时间运行稳定性。

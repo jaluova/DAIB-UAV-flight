@@ -10,11 +10,12 @@
 - 持久化卷：`daib-registry-data`。
 - 重启策略：`unless-stopped`。
 - `5000` 被 macOS ControlCenter/AirPlay 占用，因此使用 `5050`。
-- `daib-algorithm:openeuler-arm64` 已首次推送成功。
-- 当前 manifest digest：
-  `sha256:d6063d42dc656da29bd5156ce826f934c2c6aba75a10632fb987097f66e161bc`。
-- Registry 数据当前约 788.7 MiB。
-- 板卡创建 Registry 时不在线，板卡端 pull 尚未验证。
+- Registry 当前包含 `openeuler-arm64` 和 `yyy-openeuler-arm64` 两个算法标签。
+- `yyy-openeuler-arm64` manifest digest：
+  `sha256:42e1f92c9ff965660f489dac4c8fa0cd625bdb1653bc79b9cc167c5efdafc762`。
+- 2026-08-10 已在板卡完成增量 pull、算法容器重建和健康检查。
+- 当前 YYY 镜像包含 MID-70/D435i 板端 launch；根仓库提交为 `ae1a5a3`，
+  LIVO 子模块提交为 `69f14ae`。
 
 ## 日常更新
 

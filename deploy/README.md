@@ -232,8 +232,8 @@ docker compose --env-file deploy/.env \
 
 Reserve `192.168.218.119` for the Mac in DHCP or replace it consistently if the
 address changes. Docker Desktop and the `daib-registry` container must be running
-while the board pulls. The board-side pull was not yet validated because the
-board was offline when the registry was created.
+while the board pulls. Board-side pull and algorithm-only Compose recreation were
+validated on 2026-08-10 with the `yyy-openeuler-arm64` tag.
 
 The checked board defaults are `DATA_DIR=/mnt/ssd/data` and
 `LIDAR_INTERFACE=enP3p49s0`. Create the data directory before starting the
