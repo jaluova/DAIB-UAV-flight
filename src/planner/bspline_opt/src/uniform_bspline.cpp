@@ -58,7 +58,7 @@ namespace ego_planner
 
   Eigen::MatrixXd UniformBspline::getControlPoint() { return control_points_; }
 
-  Eigen::VectorXd UniformBspline::evaluateDeBoor(const double &u)
+  Eigen::VectorXd UniformBspline::evaluateDeBoor(const double &u) const
   {
 
     double ub = min(max(u_(p_), u), u_(m_ - p_));
