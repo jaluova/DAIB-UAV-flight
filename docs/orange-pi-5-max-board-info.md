@@ -1,6 +1,6 @@
 # Orange Pi 5 Max board profile
 
-Updated: 2026-08-08
+Updated: 2026-08-10
 
 ## Confirmed host
 
@@ -13,6 +13,7 @@ Updated: 2026-08-08
 | Memory | 7.8 GiB RAM, 11 GiB zram swap |
 | Docker | 29.7.1, cgroup v2 |
 | Compose | 5.4.0 |
+| SSH endpoint | `orangepi@192.168.218.200` |
 | Wi-Fi | `wlan0`, `192.168.108.42/24` |
 | Wired Ethernet | `enP3p49s0` |
 | NVMe | `/mnt/ssd`, about 110 GiB free |

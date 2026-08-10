@@ -126,7 +126,7 @@ When only the algorithm image changed, transfer the smaller standalone archive.
 ```bash
 rsync -ahP \
   dist/daib-algorithm-openeuler-arm64.tar.zst \
-  oem@192.168.126.200:/mnt/ssd/
+  orangepi@192.168.218.200:/mnt/ssd/
 ```
 
 On the board, verify and load it directly. Docker 29 recognizes the zstd
@@ -159,7 +159,7 @@ docker image ls --filter dangling=true
 
 ### Frequent updates through the LAN registry
 
-The validated Mac-side registry runs at `192.168.126.119:5050`. Port 5000 is
+The validated Mac-side registry runs at `192.168.218.119:5050`. Port 5000 is
 not used because macOS ControlCenter/AirPlay already listens there. The registry
 uses the persistent Docker volume `daib-registry-data` and does not need Internet
 access after the `registry:2` image has been downloaded once:
@@ -174,7 +174,7 @@ docker run -d \
   registry:2
 
 curl http://127.0.0.1:5050/v2/
-curl http://192.168.126.119:5050/v2/
+curl http://192.168.218.119:5050/v2/
 ```
 
 Both curl commands must return `{}`. Build the algorithm image, tag it for the
@@ -205,7 +205,7 @@ such as `data-root`:
 ```json
 {
   "insecure-registries": [
-    "192.168.126.119:5050"
+    "192.168.218.119:5050"
   ]
 }
 ```
@@ -214,12 +214,12 @@ Restart Docker on the board, pull the image and select it in `deploy/.env`:
 
 ```bash
 sudo systemctl restart docker
-curl http://192.168.126.119:5050/v2/
-docker pull 192.168.126.119:5050/daib-algorithm:openeuler-arm64
+curl http://192.168.218.119:5050/v2/
+docker pull 192.168.218.119:5050/daib-algorithm:openeuler-arm64
 ```
 
 ```dotenv
-ALGORITHM_IMAGE=192.168.126.119:5050/daib-algorithm:openeuler-arm64
+ALGORITHM_IMAGE=192.168.218.119:5050/daib-algorithm:openeuler-arm64
 ```
 
 Then recreate only the algorithm service:
@@ -230,7 +230,7 @@ docker compose --env-file deploy/.env \
   up -d --no-build --no-deps --force-recreate algorithm
 ```
 
-Reserve `192.168.126.119` for the Mac in DHCP or replace it consistently if the
+Reserve `192.168.218.119` for the Mac in DHCP or replace it consistently if the
 address changes. Docker Desktop and the `daib-registry` container must be running
 while the board pulls. The board-side pull was not yet validated because the
 board was offline when the registry was created.

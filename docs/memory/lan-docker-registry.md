@@ -1,10 +1,11 @@
 # 局域网 Docker Registry
 
-更新日期：2026-08-09
+更新日期：2026-08-10
 
 ## 当前状态
 
-- Registry 运行在构建 Mac：`http://192.168.126.119:5050`。
+- Registry 运行在构建 Mac：`http://192.168.218.119:5050`。
+- Orange Pi 当前管理地址：`orangepi@192.168.218.200`。
 - 容器名：`daib-registry`，镜像：`registry:2`。
 - 持久化卷：`daib-registry-data`。
 - 重启策略：`unless-stopped`。
@@ -31,7 +32,7 @@ docker push localhost:5050/daib-algorithm:openeuler-arm64
 
 ```json
 {
-  "insecure-registries": ["192.168.126.119:5050"]
+  "insecure-registries": ["192.168.218.119:5050"]
 }
 ```
 
@@ -39,13 +40,13 @@ docker push localhost:5050/daib-algorithm:openeuler-arm64
 
 ```bash
 sudo systemctl restart docker
-docker pull 192.168.126.119:5050/daib-algorithm:openeuler-arm64
+docker pull 192.168.218.119:5050/daib-algorithm:openeuler-arm64
 ```
 
 `deploy/.env`：
 
 ```dotenv
-ALGORITHM_IMAGE=192.168.126.119:5050/daib-algorithm:openeuler-arm64
+ALGORITHM_IMAGE=192.168.218.119:5050/daib-algorithm:openeuler-arm64
 ```
 
 ## 检查与恢复
@@ -59,7 +60,7 @@ docker start daib-registry
 ```
 
 Mac 必须运行 Docker Desktop 和 `daib-registry`，板卡才能拉取。Mac 的
-`192.168.126.119` 应设置 DHCP 地址保留。局域网可以完全离线传输；只有
+`192.168.218.119` 应设置 DHCP 地址保留。局域网可以完全离线传输；只有
 首次获取 `registry:2` 或基础镜像时需要外网。
 
 ## 代理经验

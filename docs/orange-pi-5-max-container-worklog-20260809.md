@@ -107,7 +107,7 @@ IMU 初始化、LIO/VIO 和 voxel map 更新正常，Foxglove Bridge 能监听 8
 ```bash
 rsync -ahP \
   dist/daib-algorithm-openeuler-arm64.tar.zst \
-  oem@192.168.126.200:/mnt/ssd/
+  orangepi@192.168.218.200:/mnt/ssd/
 ```
 
 在板卡上校验并加载：
@@ -130,8 +130,9 @@ Docker 29 可以直接加载 `.tar.zst`。已有的相同镜像层会在 Docker 
 
 | 项目 | 当前值 |
 |---|---|
-| Mac 局域网地址 | `192.168.126.119` |
-| Registry 地址 | `http://192.168.126.119:5050` |
+| Orange Pi 当前管理地址 | `orangepi@192.168.218.200` |
+| Mac 局域网地址 | `192.168.218.119` |
+| Registry 地址 | `http://192.168.218.119:5050` |
 | 容器 | `daib-registry` |
 | 镜像 | `registry:2` |
 | 持久化卷 | `daib-registry-data` |
@@ -159,7 +160,7 @@ docker push localhost:5050/daib-algorithm:openeuler-arm64
 
 ```json
 {
-  "insecure-registries": ["192.168.126.119:5050"]
+  "insecure-registries": ["192.168.218.119:5050"]
 }
 ```
 
@@ -167,14 +168,14 @@ docker push localhost:5050/daib-algorithm:openeuler-arm64
 
 ```bash
 sudo systemctl restart docker
-curl http://192.168.126.119:5050/v2/
-docker pull 192.168.126.119:5050/daib-algorithm:openeuler-arm64
+curl http://192.168.218.119:5050/v2/
+docker pull 192.168.218.119:5050/daib-algorithm:openeuler-arm64
 ```
 
 `deploy/.env` 中应设置：
 
 ```dotenv
-ALGORITHM_IMAGE=192.168.126.119:5050/daib-algorithm:openeuler-arm64
+ALGORITHM_IMAGE=192.168.218.119:5050/daib-algorithm:openeuler-arm64
 ```
 
 Registry 为可信局域网内的 HTTP 服务，不应暴露到公网。Mac 地址应通过
@@ -201,7 +202,7 @@ docker compose --env-file deploy/.env \
 
 ## 后续待办
 
-1. 板卡上线后配置 `192.168.126.119:5050` 为 insecure registry，验证增量
+1. 板卡上线后配置 `192.168.218.119:5050` 为 insecure registry，验证增量
    pull，并确认 Compose 能使用 Registry 镜像正常启动。
 2. 接入 Livox，确认 `enP3p49s0` 的实际 CIDR，再决定是否启用自动配网。
 3. 接入 D435i，确认 USB 3.0 枚举、权限、图像和 IMU 数据。
