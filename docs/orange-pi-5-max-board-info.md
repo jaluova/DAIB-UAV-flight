@@ -8,15 +8,17 @@ Updated: 2026-08-10
 |---|---|
 | Board | Orange Pi 5 Max, RK3588 |
 | Architecture | `aarch64` |
-| Host OS | Arch Linux ARM, rolling |
-| Kernel | `5.10.160-1` |
-| Memory | 7.8 GiB RAM, 11 GiB zram swap |
-| Docker | 29.7.1, cgroup v2 |
+| Host OS | Orange Pi 1.0.0, Ubuntu 22.04.4 LTS (Jammy) |
+| Kernel | `6.1.43-rockchip-rk3588` |
+| Memory | 7.7 GiB RAM, 3.9 GiB swap |
+| Docker | 27.0.3, cgroup v2, overlay2 |
 | Compose | 5.4.0 |
 | SSH endpoint | `orangepi@192.168.218.200` |
-| Wi-Fi | `wlan0`, `192.168.108.42/24` |
-| Wired Ethernet | `enP3p49s0` |
-| NVMe | `/mnt/ssd`, about 110 GiB free |
+| Wi-Fi | `wlan0`, `192.168.218.200/24` |
+| Wired Ethernet | `enP3p49s0`, currently down |
+| Root filesystem | `/dev/mmcblk1p2`, 56 GiB, about 53 GiB free |
+| NVMe | `/dev/nvme0n1p1`, 117 GiB, about 93 GiB free at `/mnt/ssd` |
+| Terminal multiplexer | `tmux` installed at `/usr/bin/tmux` |
 
 ## Deployment paths
 
@@ -27,14 +29,18 @@ Updated: 2026-08-10
 - Bag container mount: `/bags` (read-only)
 - Compose file: `deploy/compose.orange-pi-5-max.yml`
 
-The NVMe mount must be persistent and available before Docker starts. Confirm
-the migration with:
+The NVMe mount is persistent in `/etc/fstab`, and Docker currently stores data
+under `/mnt/ssd/docker`. Confirm the migration with:
 
 ```bash
 findmnt /mnt/ssd
 docker info --format '{{.DockerRootDir}}'
 systemctl show docker -p After -p RequiresMountsFor
 ```
+
+The current Ubuntu Docker unit does not declare `RequiresMountsFor=/mnt/ssd`.
+Add a systemd dependency before relying on automatic boot startup; otherwise
+Docker may start before the `nofail` NVMe mount is ready.
 
 ## Pending hardware checks
 

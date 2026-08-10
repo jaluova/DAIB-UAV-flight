@@ -58,4 +58,4 @@ docker save "$image" | zstd -T0 -3 -f -o "$archive"
 )
 
 echo "Created $archive"
-echo "Load on Docker 29 with: docker load -i $(basename -- "$archive")"
+echo "Load with: docker load -i $(basename -- "$archive")"

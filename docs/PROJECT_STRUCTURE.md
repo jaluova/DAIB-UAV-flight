@@ -1,14 +1,14 @@
 # 项目目录与上传边界
 
-更新日期：2026-08-08
+更新日期：2026-08-10
 
 ## 当前目标
 
 在 Apple Silicon Mac 上构建 `linux/arm64` 算法和驱动镜像，再部署到香橙派。
 容器基线为 openEuler 24.03 LTS + ROS Noetic，目标设备为 Orange Pi 5 Max
-（RK3588，ARM64），宿主系统为 Arch Linux。容器使用宿主机内核和独立的
-openEuler 24.03 用户态。既有 Atlas/openEuler 记录只作为构建与排错依据，
-不是 Orange Pi 5 Max 的直接配置。
+（RK3588，ARM64），宿主系统为 Orange Pi Ubuntu 22.04.4 LTS。容器使用
+Ubuntu 宿主机的 Rockchip 内核和独立的 openEuler 24.03 用户态。既有
+Atlas/openEuler 记录只作为构建与排错依据，不是 Orange Pi 5 Max 的直接配置。
 
 ## 目录职责
 

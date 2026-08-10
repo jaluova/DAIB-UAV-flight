@@ -7,9 +7,9 @@ This directory builds two Linux ARM64 images for the Orange Pi 5 Max:
 - `daib-drivers:openeuler-arm64`: D435i/librealsense and Livox MID-70 drivers.
 
 Both images use `openeuler/openeuler:24.03-lts-sp4` with ROS Noetic. The Orange
-Pi host uses Arch Linux ARM64; containers provide their own openEuler 24.03
-userspace and share the Arch host kernel. These images are CPU-only and do not
-include RK3588 GPU or NPU runtimes.
+Pi host currently uses Orange Pi Ubuntu 22.04.4 LTS ARM64; containers provide
+their own openEuler 24.03 userspace and share the Ubuntu host's Rockchip kernel.
+These images are CPU-only and do not include RK3588 GPU or NPU runtimes.
 
 ## Why openEuler 24.03
 
@@ -74,12 +74,12 @@ BUILD_JOBS=1 ./deploy/scripts/build-algorithm-image.sh
 ```
 
 This creates `dist/daib-algorithm-openeuler-arm64.tar.zst` and its SHA-256
-file. Docker 29 can load that archive directly with `docker load -i`.
+file. Docker can load that archive directly with `docker load -i`.
 
 ## 4. Prepare the Orange Pi 5 Max
 
-The host must be a 64-bit Arch Linux installation. Verify the board before
-transferring images:
+The checked host is Orange Pi Ubuntu 22.04.4 LTS (`jammy`) on ARM64. Verify the
+board before transferring images:
 
 ```bash
 uname -m
@@ -93,12 +93,13 @@ lsusb
 
 `uname -m` must report `aarch64` or `arm64`. Use at least 8 GiB RAM and keep at
 least 40 GiB of free storage; NVMe storage is strongly recommended. If Docker is
-not installed on Arch Linux, install and enable it with the distribution's
-current `docker` and Compose packages before continuing.
+not installed, use Docker's official Ubuntu installation instructions and
+install the Engine, Buildx and Compose plugin before continuing.
 
-The checked board has 7.8 GiB RAM, 11 GiB zram swap, and a 119 GiB NVMe mounted
-at `/mnt/ssd`. Store both Docker data and runtime data on that NVMe. After moving
-Docker's `data-root`, verify that the NVMe is mounted before Docker starts:
+The checked board has 7.7 GiB RAM, 3.9 GiB swap, and a 117 GiB NVMe mounted at
+`/mnt/ssd` with about 93 GiB currently free. Store both Docker data and runtime
+data on that NVMe. After moving Docker's `data-root`, verify that the NVMe is
+mounted before Docker starts:
 
 ```bash
 findmnt /mnt/ssd
@@ -129,7 +130,7 @@ rsync -ahP \
   orangepi@192.168.218.200:/mnt/ssd/
 ```
 
-On the board, verify and load it directly. Docker 29 recognizes the zstd
+On the board, verify and load it directly. Docker recognizes the zstd
 compression, so it does not need to be decompressed first:
 
 ```bash
@@ -322,7 +323,7 @@ docker-compose --env-file deploy/.env -f deploy/compose.orange-pi-5-max.yml up -
 - `BAGS_DIR` is mounted read-only as `/bags`; no bag is replayed unless
   `BAG_FILE` is set.
 - D435i publishes color, depth and fused IMU.
-- librealsense defaults to its RSUSB backend so it does not depend on UVC patches in the Arch host kernel.
+- librealsense defaults to its RSUSB backend so it does not depend on UVC patches in the Ubuntu host kernel.
 - MID-70 publishes `livox_ros_driver/CustomMsg` at 10 Hz.
 - Both containers share the host network and ROS master at `127.0.0.1:11311`.
 - The driver container is privileged and mounts `/dev` for USB, V4L2, hidraw and Ethernet access.

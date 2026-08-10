@@ -1,13 +1,13 @@
 # Orange Pi 5 Max 容器化工作记录
 
-更新日期：2026-08-09
+更新日期：2026-08-10
 
 ## 目标与结论
 
 本轮工作将原有部署方案调整为 Orange Pi 5 Max，并在 Apple Silicon Mac
-上构建供板卡运行的 ARM64/openEuler 容器。板卡宿主系统为 Arch Linux ARM，
-这不影响运行 openEuler 用户态镜像：容器使用 openEuler 24.03 LTS SP4
-用户态并共享 Arch 宿主机的 ARM64 Linux 内核。
+上构建供板卡运行的 ARM64/openEuler 容器。板卡当前宿主系统为 Orange Pi
+Ubuntu 22.04.4 LTS，这不影响运行 openEuler 用户态镜像：容器使用
+openEuler 24.03 LTS SP4 用户态并共享 Ubuntu 宿主机的 Rockchip ARM64 内核。
 
 正式部署保留两个容器：
 
@@ -27,12 +27,13 @@ Foxglove Bridge 已集成进算法镜像，不再维护单独的第三个 Foxglo
 |---|---|
 | 板卡 | Orange Pi 5 Max / RK3588 |
 | 架构 | `aarch64` |
-| 宿主系统 | Arch Linux ARM rolling |
-| 内核 | `5.10.160-1` |
-| 内存 | 7.8 GiB RAM、11 GiB zram swap |
-| Docker | 29.7.1、cgroup v2 |
+| 宿主系统 | Orange Pi 1.0.0 / Ubuntu 22.04.4 LTS |
+| 内核 | `6.1.43-rockchip-rk3588` |
+| 内存 | 7.7 GiB RAM、3.9 GiB swap |
+| Docker | 27.0.3、cgroup v2、overlay2 |
 | Compose | 5.4.0 |
-| NVMe | `/mnt/ssd`，约 110 GiB 可用 |
+| Wi-Fi | `wlan0` / `192.168.218.200/24` |
+| NVMe | `/mnt/ssd`，约 93 GiB 可用 |
 | Docker data-root | `/mnt/ssd/docker` |
 | 数据目录 | `/mnt/ssd/data` |
 | bag 目录 | `/mnt/ssd/bags` |
@@ -120,7 +121,7 @@ docker image inspect daib-algorithm:openeuler-arm64 \
   --format 'ID={{.Id}} ARCH={{.Architecture}} SIZE={{.Size}}'
 ```
 
-Docker 29 可以直接加载 `.tar.zst`。已有的相同镜像层会在 Docker 存储中
+Docker 可以直接加载 `.tar.zst`。已有的相同镜像层会在 Docker 存储中
 复用，但离线归档仍是完整镜像，所以每次仍需传输整个文件。频繁更新时可
 部署局域网 registry，让 `docker pull` 只传输板卡缺少的层。
 

@@ -3,7 +3,7 @@
 ## 当前迁移
 
 - [项目目录与上传边界](../PROJECT_STRUCTURE.md)
-- [Orange Pi 5 Max 板卡环境](../orange-pi-5-max-board-info.md)：当前管理地址 `orangepi@192.168.218.200`
+- [Orange Pi 5 Max 板卡环境](../orange-pi-5-max-board-info.md)：Ubuntu 22.04.4 LTS，当前管理地址 `orangepi@192.168.218.200`
 - [本机 D435i + MID-70 驱动经验](../local-d435i-mid70-drivers.md)
 - [MID-70 与 D435i 外参标定](../mid70-d435i-manual-extrinsic-calibration.md)
 - [FAST-LIVO2 编译经验](../fastlivo2-compile-guide.md)
