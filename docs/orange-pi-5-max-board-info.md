@@ -15,7 +15,7 @@ Updated: 2026-08-10
 | Compose | 5.4.0 |
 | SSH endpoint | `orangepi@192.168.218.200` |
 | Wi-Fi | `wlan0`, `192.168.218.200/24` |
-| Wired Ethernet | `enP3p49s0`, currently down |
+| Wired Ethernet | `enP3p49s0`, Livox host address `192.168.1.50/24` |
 | Root filesystem | `/dev/mmcblk1p2`, 56 GiB, about 53 GiB free |
 | NVMe | `/dev/nvme0n1p1`, 117 GiB, about 93 GiB free at `/mnt/ssd` |
 | Terminal multiplexer | `tmux` installed at `/usr/bin/tmux` |
@@ -42,11 +42,14 @@ The current Ubuntu Docker unit does not declare `RequiresMountsFor=/mnt/ssd`.
 Add a systemd dependency before relying on automatic boot startup; otherwise
 Docker may start before the `nofail` NVMe mount is ready.
 
-## Pending hardware checks
+## Sensor network validation
 
-- Livox is not connected. `enP3p49s0` is confirmed, but its host CIDR is not.
+- MID-70 `192.168.1.119` was validated on `enP3p49s0` with host address
+  `192.168.1.50/24` and broadcast code `3GGDLA4001V3191`.
+- On kernel `6.1.43-rockchip-rk3588`, Livox broadcast reception requires
+  `net.ipv4.conf.all.rp_filter=0` and
+  `net.ipv4.conf.enP3p49s0.rp_filter=0`.
 - D435i is not connected. Confirm it appears in `lsusb` on a USB 3.0 port.
-- Keep `CONFIGURE_LIDAR_INTERFACE=false` until the Livox subnet is confirmed.
 - Confirm a stable 5 V / 5 A supply and active cooling before sustained use.
 
 The current image implementation, validation results, artifact checksums and

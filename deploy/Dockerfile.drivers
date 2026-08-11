@@ -81,6 +81,8 @@ RUN git -C /opt/drivers_ws/src/livox_ros_driver apply --ignore-space-change /tmp
     && rm -rf /opt/drivers_ws/build
 
 COPY deploy/scripts/drivers-entrypoint.sh /usr/local/bin/drivers-entrypoint
-RUN chmod +x /usr/local/bin/drivers-entrypoint
+RUN chmod +x /usr/local/bin/drivers-entrypoint \
+    && python3 -m ensurepip \
+    && python3 -m pip install --no-cache-dir python-gnupg
 
 ENTRYPOINT ["/usr/local/bin/drivers-entrypoint"]

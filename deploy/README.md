@@ -236,12 +236,26 @@ address changes. Docker Desktop and the `daib-registry` container must be runnin
 while the board pulls. Board-side pull and algorithm-only Compose recreation were
 validated on 2026-08-10 with the `yyy-openeuler-arm64` tag.
 
-The checked board defaults are `DATA_DIR=/mnt/ssd/data` and
-`LIDAR_INTERFACE=enP3p49s0`. Create the data directory before starting the
-containers. `LIDAR_HOST_CIDR=192.168.1.100/24` remains a placeholder until the
-Livox is connected and its subnet is confirmed. Leave
-`CONFIGURE_LIDAR_INTERFACE=false` until then; setting it to `true` changes the
-host interface because the driver uses host networking.
+The checked board defaults are `DATA_DIR=/mnt/ssd/data`,
+`LIDAR_INTERFACE=enP3p49s0`, `LIDAR_HOST_CIDR=192.168.1.50/24`, and
+`LIDAR_DEVICE_IP=192.168.1.119`. Create the data directory before starting the
+containers. The privileged driver uses host networking and configures the
+dedicated LiDAR interface at startup. It also sets `rp_filter=0` for `all` and
+the LiDAR interface; both settings are required for Livox limited-broadcast
+reception on the validated Rockchip 6.1.43 kernel. Keep Wi-Fi on its existing
+policy. Override these values only when the physical interface or LiDAR subnet
+changes.
+
+The validated MID-70 broadcast code is passed as
+`bd_list:=3GGDLA4001V3191`. The entrypoint refuses to start Livox unless the
+wired address, route to `192.168.1.119`, source address, and reverse-path filter
+state all match the configured values. This prevents a healthy ROS process with
+no point-cloud stream from being mistaken for a successful deployment.
+
+To validate only the host-side LiDAR network without starting ROS drivers, run
+the driver image with the normal LiDAR environment plus
+`LIDAR_NETWORK_PREFLIGHT_ONLY=true`. The entrypoint configures and verifies the
+network, prints `LiDAR network preflight passed`, and exits.
 
 Start the containers:
 

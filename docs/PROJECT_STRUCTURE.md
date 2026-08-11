@@ -1,6 +1,10 @@
 # 项目目录与上传边界
 
-更新日期：2026-08-10
+更新日期：2026-08-11
+
+2026-08-11 Orange Pi 5 Max 实机部署、D435i HID/IIO 内核模块、MID-70
+NetworkManager 配置、时间戳验收和手动算法容器工作流见
+[`orange-pi-d435i-mid70-fast-livo-runbook-20260811.md`](orange-pi-d435i-mid70-fast-livo-runbook-20260811.md)。
 
 ## 当前目标
 

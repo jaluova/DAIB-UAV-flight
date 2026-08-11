@@ -55,11 +55,14 @@ services:
     environment:
       ROS_MASTER_URI: http://127.0.0.1:11311
       ROS_HOSTNAME: 127.0.0.1
-      CONFIGURE_LIDAR_INTERFACE: ${CONFIGURE_LIDAR_INTERFACE:-false}
+      CONFIGURE_LIDAR_INTERFACE: ${CONFIGURE_LIDAR_INTERFACE:-true}
+      CONFIGURE_LIDAR_RP_FILTER: ${CONFIGURE_LIDAR_RP_FILTER:-true}
+      VERIFY_LIDAR_RP_FILTER: ${VERIFY_LIDAR_RP_FILTER:-true}
       LIDAR_INTERFACE: ${LIDAR_INTERFACE:-enP3p49s0}
-      LIDAR_HOST_CIDR: ${LIDAR_HOST_CIDR:-192.168.1.100/24}
+      LIDAR_HOST_CIDR: ${LIDAR_HOST_CIDR:-192.168.1.50/24}
+      LIDAR_DEVICE_IP: ${LIDAR_DEVICE_IP:-192.168.1.119}
       ENABLE_REALSENSE: ${ENABLE_REALSENSE:-true}
       ENABLE_LIVOX: ${ENABLE_LIVOX:-true}
       REALSENSE_ARGS: ${REALSENSE_ARGS:-enable_depth:=true enable_color:=true enable_gyro:=true enable_accel:=true unite_imu_method:=linear_interpolation}
-      LIVOX_ARGS: ${LIVOX_ARGS:-publish_freq:=10.0}
+      LIVOX_ARGS: ${LIVOX_ARGS:-bd_list:=3GGDLA4001V3191 publish_freq:=10.0}
     shm_size: 512m

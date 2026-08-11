@@ -27,6 +27,10 @@ Livox MID-70 / D435i / IMU
       Controller / PX4
 ```
 
+上图是目标系统链路，不是默认容器启动后的现状。当前默认实机入口只启动独立 LIO；
+Explorer 所需的退化度量和 PVBSM 等接口与当前稳定 LIVO 前端仍有差异，详见
+[本地变更与算法影响审计](docs/local-change-audit-20260809.md)。
+
 三个算法模块通过 ROS1 消息通信，不直接依赖彼此的源码头文件。定位链路保持高频
 运行，探索和规划模块可以独立启动、停止或替换。
 
@@ -135,6 +139,8 @@ docker compose --env-file deploy/.env \
 
 ## 相关文档
 
+- [本地变更与算法影响审计](docs/local-change-audit-20260809.md)
+- [工程适配与算法边界说明](docs/collaboration-compatibility-handoff-20260809.md)
 - [系统目录与上传边界](docs/PROJECT_STRUCTURE.md)
 - [DAIB-Explorer 架构](src/DAIB-Explorer/docs/ARCHITECTURE.md)
 - [DAIB-Planner 集成接口](src/DAIB-Planner/docs/DAIB_INTEGRATION.md)

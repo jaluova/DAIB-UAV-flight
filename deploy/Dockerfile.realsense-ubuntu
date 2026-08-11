@@ -1,0 +1,89 @@
+FROM ros:noetic-ros-base-focal
+
+SHELL ["/bin/bash", "-o", "pipefail", "-c"]
+
+ARG BUILD_JOBS=1
+ARG LIBREALSENSE_REF=v2.55.1
+ARG REALSENSE_ROS_REF=2.3.2
+ARG REALSENSE_FORCE_RSUSB_BACKEND=ON
+
+ENV DEBIAN_FRONTEND=noninteractive \
+    LANG=C.UTF-8 \
+    LC_ALL=C.UTF-8 \
+    ROS_DISTRO=noetic \
+    ROS_MASTER_URI=http://127.0.0.1:11311 \
+    ROS_HOSTNAME=127.0.0.1
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+      build-essential \
+      ca-certificates \
+      cmake \
+      curl \
+      git \
+      iproute2 \
+      libgl1-mesa-dev \
+      libglu1-mesa-dev \
+      libglfw3-dev \
+      libgtk-3-dev \
+      libssl-dev \
+      libusb-1.0-0-dev \
+      libudev-dev \
+      pkg-config \
+      ros-noetic-cv-bridge \
+      ros-noetic-ddynamic-reconfigure \
+      ros-noetic-diagnostic-updater \
+      ros-noetic-image-transport \
+      ros-noetic-nodelet \
+      ros-noetic-rosbag \
+      ros-noetic-roslaunch \
+      ros-noetic-sensor-msgs \
+      ros-noetic-tf \
+      usbutils \
+    && rm -rf /var/lib/apt/lists/*
+
+# RSUSB avoids requiring RealSense-specific patches in the Rockchip UVC kernel
+# driver. Ubuntu supplies the libusb and ROS userspace for this A/B image.
+RUN mkdir -p /tmp/librealsense \
+    && curl -fL --retry 5 \
+         "https://github.com/IntelRealSense/librealsense/archive/refs/tags/${LIBREALSENSE_REF}.tar.gz" \
+       | tar -xz --strip-components=1 -C /tmp/librealsense \
+    && cmake -S /tmp/librealsense -B /tmp/librealsense/build \
+         -DCMAKE_BUILD_TYPE=Release \
+         -DBUILD_EXAMPLES=OFF \
+         -DBUILD_GRAPHICAL_EXAMPLES=OFF \
+         -DBUILD_PYTHON_BINDINGS=OFF \
+         -DBUILD_UNIT_TESTS=OFF \
+         -DBUILD_WITH_TM2=OFF \
+         -DFORCE_RSUSB_BACKEND="${REALSENSE_FORCE_RSUSB_BACKEND}" \
+    && cmake --build /tmp/librealsense/build --parallel "${BUILD_JOBS}" \
+    && cmake --install /tmp/librealsense/build \
+    && ldconfig \
+    && install -D -m 0644 \
+         /tmp/librealsense/config/99-realsense-libusb.rules \
+         /etc/udev/rules.d/99-realsense-libusb.rules \
+    && rm -rf /tmp/librealsense
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends libeigen3-dev \
+    && rm -rf /var/lib/apt/lists/* \
+    && mkdir -p /opt/drivers_ws/src \
+    && git clone https://github.com/IntelRealSense/realsense-ros.git \
+         /opt/drivers_ws/src/realsense-ros \
+    && git -C /opt/drivers_ws/src/realsense-ros checkout "${REALSENSE_ROS_REF}" \
+    && source /opt/ros/noetic/setup.bash \
+    && cd /opt/drivers_ws \
+    && catkin_make -j "${BUILD_JOBS}" -l "${BUILD_JOBS}" \
+         -DCMAKE_BUILD_TYPE=Release \
+         -DCATKIN_ENABLE_TESTING=OFF \
+         -DCMAKE_PREFIX_PATH=/opt/ros/noetic \
+    && rm -rf /opt/drivers_ws/build
+
+COPY deploy/scripts/drivers-entrypoint.sh /usr/local/bin/drivers-entrypoint
+RUN chmod +x /usr/local/bin/drivers-entrypoint
+
+ENV ENABLE_REALSENSE=true \
+    ENABLE_LIVOX=false \
+    REALSENSE_ARGS="enable_depth:=true enable_color:=true enable_gyro:=true enable_accel:=true unite_imu_method:=linear_interpolation"
+
+ENTRYPOINT ["/usr/local/bin/drivers-entrypoint"]
