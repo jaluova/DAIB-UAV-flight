@@ -512,11 +512,10 @@ docker cp \
 
 ## 11. VIO 力度
 
-> **2026-08-12 基线更正**：本节记录的是此前本地 launch 实验，不是当前
-> `sync_yyy` 主线接口。当前唯一依据见
-> [`CURRENT_SYNC_YYY_BASELINE.md`](CURRENT_SYNC_YYY_BASELINE.md)。主线
-> `mapping_mid70_d435i.launch` 没有 `vio_img_point_cov` 参数，当前测试不得把它追加到
-> `roslaunch` 命令；`/vio/img_point_cov` 继续由 YAML 加载，默认值为 `100`。
+> **2026-08-12 基线更正**：当前 `sync_yyy` 主线
+> `mapping_mid70_d435i.launch` 已支持 `vio_img_point_cov`，默认值为 `100`。当前唯一
+> 依据见 [`CURRENT_SYNC_YYY_BASELINE.md`](CURRENT_SYNC_YYY_BASELINE.md)。该接口需要
+> 使用包含 `DAIB-LIVO@58b3af5` 的新镜像；旧板端镜像不保证支持。
 
 当前配置项：
 
@@ -536,7 +535,7 @@ vio:
 | 1000 | 明显弱化，外参仍在验证时的建议起点 |
 | 2000 | 很弱，仅保留较小视觉修正 |
 
-下面是历史本地补丁曾支持的命令，**当前主线不可使用**：
+当前主线可直接在启动时覆盖：
 
 ```bash
 roslaunch fast_livo mapping_mid70_d435i.launch \
@@ -545,7 +544,7 @@ roslaunch fast_livo mapping_mid70_d435i.launch \
   vio_img_point_cov:=1000
 ```
 
-当前主线启动命令是：
+不需要弱化视觉时可省略该参数，等价于默认值 `100`：
 
 ```bash
 roslaunch fast_livo mapping_mid70_d435i.launch \
@@ -553,9 +552,9 @@ roslaunch fast_livo mapping_mid70_d435i.launch \
   use_camera:=true
 ```
 
-启动后用 `rosparam get /vio/img_point_cov` 验证 YAML 实际加载值，当前预期为 `100`。
-若后续确实需要调整 VIO 权重，应先形成明确的主线配置修改和 A/B 测试方案，不再依赖
-本地未提交的 launch 参数。
+启动后用 `rosparam get /vio/img_point_cov` 验证实际加载值。该参数只在节点初始化时
+读取；改变力度必须停止并重新启动 `laserMapping`，运行中执行 `rosparam set` 不会刷新
+VIOManager 已保存的值。
 
 `vio_state_update` 和 `vio_diagnostics` 仍不是该 launch 的有效参数，不要传入。
 

@@ -12,9 +12,9 @@
 顶层工作分支：
 
 ```text
-DAIB-UAV                 sync-yyy-main-build-fixes @ 6e20c03
-DAIB-LIVO                sync-yyy-main-build-fixes @ adf449f
-DAIB-Explorer            main / sync build fixes   @ a3f9e4e
+DAIB-UAV                 sync-yyy-main-build-fixes @ 本文所在提交
+DAIB-LIVO                sync-yyy-main-build-fixes @ 58b3af5
+DAIB-Explorer            sync-yyy-main-build-fixes @ 68e300c
 DAIB-Planner             main / sync build fixes   @ e6f50a6
 ```
 
@@ -25,10 +25,13 @@ DAIB-Planner             main / sync build fixes   @ e6f50a6
 image id: b56cd5581f60
 ```
 
-本地 `DAIB-LIVO` 工作树存在未提交的 D435i/MID-70 配置及 launch 修改。这些修改不
-属于当前主线依据，也不能用于推断板端镜像接口。特别是本地加入的
-`vio_img_point_cov` 不是主线 `mapping_mid70_d435i.launch` 参数；当前启动命令不得传入
-它。算法内部 `/vio/img_point_cov` 参数仍由主线 YAML 加载，当前值为 `100`。
+当前主线 `mapping_mid70_d435i.launch` 支持 `vio_img_point_cov`，默认值为 `100`。
+launch 在加载 YAML 后覆盖 `/vio/img_point_cov`，因此启动命令传入的值会被
+`laserMapping` 读取并用于 VIO EKF。新的 FAST-CALib batch2 外参和该 launch 接口以
+`DAIB-LIVO` 当前 `sync-yyy-main-build-fixes` 分支提交为准。
+
+当前记录的板端镜像 `b56cd5581f60` 早于该 LIVO 提交。必须重新构建并发布算法镜像、
+记录新 image ID 后，才能按上述新接口进行板端验证。
 
 ## 2. 先用一句话理解整条链
 

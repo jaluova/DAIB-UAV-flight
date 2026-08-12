@@ -8,15 +8,19 @@
 全部以 `sync_yyy` 主线及当前板端算法镜像为准：
 
 ```text
-DAIB-UAV       sync-yyy-main-build-fixes @ 6e20c03
-DAIB-LIVO      sync-yyy-main-build-fixes @ adf449f
-DAIB-Explorer  main / sync build fixes   @ a3f9e4e
+DAIB-UAV       sync-yyy-main-build-fixes @ 本文所在提交
+DAIB-LIVO      sync-yyy-main-build-fixes @ 58b3af5
+DAIB-Explorer  sync-yyy-main-build-fixes @ 68e300c
 DAIB-Planner   main / sync build fixes   @ e6f50a6
 
 algorithm image:
 192.168.218.119:5050/daib-algorithm:openeuler-arm64
 image id: b56cd5581f60
 ```
+
+上述镜像早于 `DAIB-LIVO@58b3af5`，不包含本节新增的 launch 覆盖入口和 batch2 外参。
+在新算法镜像发布并记录新 image ID 前，板端旧镜像仍按旧接口使用；不能仅因源码已合入
+就向旧镜像传 `vio_img_point_cov`。
 
 镜像标签将来可能被重新推送。一次实验记录必须同时写明镜像标签和 image ID；只写
 `openeuler-arm64` 不能唯一确定测试内容。
@@ -36,12 +40,13 @@ image id: b56cd5581f60
 
 ## FAST-LIVO 当前启动接口
 
-当前主线 `mapping_mid70_d435i.launch` 只声明以下参数：
+当前源码主线 `mapping_mid70_d435i.launch` 声明以下参数：
 
 ```text
 rviz
 use_camera
 image_rate
+vio_img_point_cov
 ```
 
 真实传感器测试使用：
@@ -49,23 +54,20 @@ image_rate
 ```bash
 roslaunch fast_livo mapping_mid70_d435i.launch \
   rviz:=false \
-  use_camera:=true
+  use_camera:=true \
+  vio_img_point_cov:=100
 ```
 
-`vio_img_point_cov` **不是当前主线的 launch 参数**，不得在上述命令后添加：
-
-```text
-vio_img_point_cov:=100
-```
-
-算法内部仍读取 ROS 参数 `/vio/img_point_cov`，当前 YAML 默认值为 `100`。启动后只需
-验证实际值：
+`vio_img_point_cov` 默认值为 `100`。launch 在加载 YAML 后覆盖 ROS 参数
+`/vio/img_point_cov`，随后 `laserMapping` 启动并读取该值，因此命令行传值会进入 VIO
+EKF。启动后验证实际值：
 
 ```bash
 rosparam get /vio/img_point_cov
 ```
 
-在正式修改主线配置或 launch 之前，不通过本地临时补丁改变该参数。
+该参数只在节点初始化时读取；改变数值需要停止并重新启动 `laserMapping`，不能依靠
+运行中的 `rosparam set` 刷新内部值。
 
 ## 当前分层测试原则
 
