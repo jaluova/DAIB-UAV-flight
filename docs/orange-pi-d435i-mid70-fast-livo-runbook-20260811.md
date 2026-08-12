@@ -2,6 +2,11 @@
 
 更新日期：2026-08-11
 
+> **当前基线提示（2026-08-12）**：本文保留硬件、驱动和历史排障记录；涉及算法
+> 镜像、容器、launch 参数和模块启动顺序时，必须以
+> [`CURRENT_SYNC_YYY_BASELINE.md`](CURRENT_SYNC_YYY_BASELINE.md) 为准。当前所有功能
+> 测试只走 `sync_yyy` 主线。
+
 ## 1. 文档目的
 
 本文汇总 2026-08-11 在 Orange Pi 5 Max 上打通 Intel RealSense D435i、
@@ -507,6 +512,12 @@ docker cp \
 
 ## 11. VIO 力度
 
+> **2026-08-12 基线更正**：本节记录的是此前本地 launch 实验，不是当前
+> `sync_yyy` 主线接口。当前唯一依据见
+> [`CURRENT_SYNC_YYY_BASELINE.md`](CURRENT_SYNC_YYY_BASELINE.md)。主线
+> `mapping_mid70_d435i.launch` 没有 `vio_img_point_cov` 参数，当前测试不得把它追加到
+> `roslaunch` 命令；`/vio/img_point_cov` 继续由 YAML 加载，默认值为 `100`。
+
 当前配置项：
 
 ```yaml
@@ -525,8 +536,7 @@ vio:
 | 1000 | 明显弱化，外参仍在验证时的建议起点 |
 | 2000 | 很弱，仅保留较小视觉修正 |
 
-`mapping_mid70_d435i.launch` 已增加 `vio_img_point_cov` 参数，默认值仍为 `100`。
-该参数在加载 YAML 后写入 `/vio/img_point_cov`，因此可以直接用命令行覆盖：
+下面是历史本地补丁曾支持的命令，**当前主线不可使用**：
 
 ```bash
 roslaunch fast_livo mapping_mid70_d435i.launch \
@@ -535,9 +545,17 @@ roslaunch fast_livo mapping_mid70_d435i.launch \
   vio_img_point_cov:=1000
 ```
 
-启动后可用 `rosparam get /vio/img_point_cov` 验证，预期输出 `1000.0`。运行中的
-节点只在启动时读取该参数；改变力度时应 `Ctrl+C` 停止算法后重新 `roslaunch`，仅执行
-`rosparam set` 不能保证内部对象更新。
+当前主线启动命令是：
+
+```bash
+roslaunch fast_livo mapping_mid70_d435i.launch \
+  rviz:=false \
+  use_camera:=true
+```
+
+启动后用 `rosparam get /vio/img_point_cov` 验证 YAML 实际加载值，当前预期为 `100`。
+若后续确实需要调整 VIO 权重，应先形成明确的主线配置修改和 A/B 测试方案，不再依赖
+本地未提交的 launch 参数。
 
 `vio_state_update` 和 `vio_diagnostics` 仍不是该 launch 的有效参数，不要传入。
 

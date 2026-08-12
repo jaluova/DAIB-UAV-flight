@@ -4,8 +4,10 @@
 
 > 本文记录的是 `192.168.126.131` 上旧的 x86 Ubuntu 双容器环境，仅保留作历史
 > 排障参考。当前仓库中的同名启动与录包脚本已经适配 Orange Pi 5 Max 的
-> `algorithm`/`drivers` Compose 架构；实机操作以
-> [`deploy/README.md`](../deploy/README.md) 为准，不要在旧环境中混用。
+> `algorithm`/`drivers` Compose 架构；当前实机算法测试只走 `sync_yyy`，准确镜像和
+> 启动接口以
+> [`CURRENT_SYNC_YYY_BASELINE.md`](CURRENT_SYNC_YYY_BASELINE.md) 为准，不要复制本文
+> 的旧 launch 参数。
 
 ## 1. 当前拓扑
 
@@ -314,7 +316,8 @@ cd /home/ufd/cc-chat
 图像生成同名的 10 Hz 话题再录制。因此无需为了录包预先启动 SLAM。若需要边跑 SLAM
 边录包，应先启动 FAST-LIVO2，再启动录制脚本，以复用已有的图像 throttle。
 
-视觉更新没有线性的“占比”参数。`vio_img_point_cov` 是图像观测协方差，数值越大，
+以下内容属于旧 x86/本地实验，**不是当前 `sync_yyy` 启动方式**。视觉更新没有线性的
+“占比”参数。`vio_img_point_cov` 是图像观测协方差，数值越大，
 视觉对共享位姿的修正越弱。实机 launch 默认值为 `100`；外参仍在验证时，建议依次
 测试 `1000`、`500`、`300`，每轮只修改这一个参数：
 

@@ -99,9 +99,14 @@ COPY src/DAIB-Planner/src/planner /opt/daib_ws/src/ego_planner_packages
 COPY src/DAIB-Planner/src/uav_simulator/Utils/quadrotor_msgs /opt/daib_ws/src/quadrotor_msgs
 COPY src/DAIB-Explorer /opt/daib_ws/src/daib_explorer
 
+# The BuildKit cache survives COPY invalidation and may contain object files
+# newer than freshly copied sources. Clear it before catkin checks timestamps so
+# the image cannot combine current sources with stale application binaries.
 # These packages are not part of the real-device single-UAV runtime.
 RUN --mount=type=cache,target=/opt/daib_ws/build,sharing=locked \
-    touch \
+    find /opt/daib_ws/build -mindepth 1 -delete \
+    && rm -rf /opt/daib_ws/devel \
+    && touch \
       /opt/daib_ws/src/ego_planner_packages/drone_detect/CATKIN_IGNORE \
       /opt/daib_ws/src/ego_planner_packages/rosmsg_tcp_bridge/CATKIN_IGNORE \
     && ln -s /opt/ros/noetic/share/catkin/cmake/toplevel.cmake /opt/daib_ws/src/CMakeLists.txt \
