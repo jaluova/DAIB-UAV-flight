@@ -44,9 +44,8 @@ RUN mkdir -p /opt/daib_ws/src \
     && sed -i 's/\bCV_WINDOW_AUTOSIZE\b/cv::WINDOW_AUTOSIZE/g' /opt/daib_ws/src/rpg_vikit/vikit_common/src/img_align.cpp
 
 # Foxglove is built into the algorithm image so the Orange Pi still deploys
-# only the algorithm and driver images. The Livox message-only package lets
-# the bridge describe CustomMsg without pulling the hardware driver into this
-# container.
+# only the algorithm and driver images. Message-only packages let the bridge
+# describe sensor topics without pulling hardware drivers into this container.
 ARG FOXGLOVE_BRIDGE_REF=0.8.5
 ARG ROS_BABEL_FISH_REF=0.9.3
 ARG WEBSOCKETPP_REF=0.8.2
@@ -82,6 +81,7 @@ RUN mkdir -p /opt/foxglove_ws/src \
       /opt/foxglove_ws/src/foxglove_bridge
 
 COPY deploy/ros/livox_ros_driver /opt/foxglove_ws/src/livox_ros_driver
+COPY deploy/ros/realsense2_camera /opt/foxglove_ws/src/realsense2_camera
 
 RUN --mount=type=cache,target=/opt/foxglove_ws/build,sharing=locked \
     source /opt/ros/noetic/setup.bash \

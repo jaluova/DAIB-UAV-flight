@@ -1,0 +1,14 @@
+<?xml version="1.0"?>
+<package format="2">
+  <name>realsense2_camera</name>
+  <version>2.3.2</version>
+  <description>RealSense message definitions required by the Foxglove bridge.</description>
+  <maintainer email="noreply@example.com">DAIB</maintainer>
+  <license>Apache-2.0</license>
+
+  <buildtool_depend>catkin</buildtool_depend>
+  <build_depend>message_generation</build_depend>
+  <build_depend>std_msgs</build_depend>
+  <exec_depend>message_runtime</exec_depend>
+  <exec_depend>std_msgs</exec_depend>
+</package>
