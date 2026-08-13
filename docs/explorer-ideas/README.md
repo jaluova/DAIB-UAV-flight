@@ -15,8 +15,9 @@
   - `已实现`。cluster 允许棱连接但不允许纯角点连接，且至少包含 10 个 planning voxel。
 - [x] [02. 发布最终入选 cluster 的 frontier](02-selected-cluster-frontiers-topic.md)
   - `已实现`。点云 topic 只显示实际产生当前 goal 的完整 frontier cluster。
-- [ ] [03. Explorer 全局 exploration memory](03-global-exploration-memory.md)
-  - `待实现`。独立记录任务期间曾被 LiDAR 稳定观察的区域，避免局部地图裁剪后重复探索。
+- [x] [03. Explorer 全局 exploration memory](03-global-exploration-memory.md)
+  - `已实现，默认观察模式`。独立记录任务期间曾被 LiDAR 稳定观察的区域；历史
+    cluster 过滤代码已具备，但默认关闭，先实机验证统计和阈值。
 - [ ] [04. active goal 来源 cluster 失效检查](04-active-goal-source-validation.md)
   - `待实现`。来源 cluster 消失时换目标或撤销旧目标，并向 Bridge 显式发布无效状态。
 - [ ] [05. 水平飞行 goal 与最终观察 yaw](05-level-flight-goal-and-observation-yaw.md)
@@ -32,7 +33,7 @@
 
 1. 先实现入选 cluster 点云，它能直接验证当前 goal 的来源。
 2. 用相同的 cluster 身份实现 active goal 失效检查和显式撤销。
-3. 实现 exploration memory 的更新与统计，第一阶段不参与过滤。
-4. 验证记忆稳定后，再接入历史区域的 cluster 过滤。
+3. 实机验证 exploration memory 的观察模式统计和运行开销。
+4. 验证记忆稳定后，开启已有的历史区域 cluster 过滤开关。
 5. 调整 goal 高度、最终 yaw 和完整 cluster 信息收益评分。
 6. 在每一步同步补充对应的结构化诊断与可视化。

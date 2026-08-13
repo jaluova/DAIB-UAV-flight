@@ -2,7 +2,7 @@
 
 ## 状态
 
-`待实现`
+`已实现，默认观察模式`
 
 ## 想法
 
@@ -22,7 +22,7 @@ frontier_history_probe_step_m: 1.0
 frontier_history_observed_ratio: 0.7
 ```
 
-## 更新规则
+## 已实现的更新规则
 
 - LiDAR 射线经过的粗 voxel 记为 `observed-free`；
 - 射线终点记为 `observed-surface`；
@@ -30,6 +30,10 @@ frontier_history_observed_ratio: 0.7
 - 同一帧先去重，每个 cell 每帧最多累计一次；
 - 至少被 3 个不同帧观察后才算稳定 observed；
 - 第一版只在内存中单调增长，Explorer 重启后清空，不写 NVMe。
+
+实现复用滚动占据图已经选出的预算内 LiDAR 射线，不增加 FAST-LIVO 点云输入，也不
+重新遍历全部原始点。超过记忆半径的射线只记录半径内的经过空间，不把远端点误记为
+surface。
 
 ## cluster 历史判断
 
@@ -40,6 +44,18 @@ cluster 通过 BFS 和大小检查后，从其 unknown 一侧向外采样 1、2�
 
 frontier 自身不参与采样，因为边界 cell 本来就已被看到。
 
+当前提供两个独立开关：
+
+```yaml
+exploration_memory_enabled: true
+exploration_memory_filter_enabled: false
+```
+
+默认只更新记忆、计算每个 cluster 的历史 observed 比例并输出统计，不改变候选集合。
+实机确认阈值可靠后，将 `exploration_memory_filter_enabled` 设为 `true` 即可让达到
+`frontier_history_observed_ratio` 的历史 cluster 不再进入 viewpoint/goal 选择。
+`valid_cluster_frontiers` 仍保留这些几何上合法的 cluster，便于对比过滤效果。
+
 ## 安全边界
 
 这份记忆不能证明一个位置现在仍然 free，不能用于碰撞检测、墙面净空或替代 Planner
@@ -48,7 +64,8 @@ frontier 自身不参与采样，因为边界 cell 本来就已被看到。
 
 ## 分阶段验收
 
-1. 第一阶段只更新和发布统计，不过滤 cluster；
-2. 确认 memory cell 数量基本单调增长，且更新耗时可接受；
-3. 再开启历史过滤，验证首次进入保留、离开返回抑制、墙后遮挡不误判；
-4. 单帧噪声不得达到稳定 observed 门槛。
+1. 第一阶段保持默认观察模式，确认日志中的 `cells/stable` 基本单调增长；
+2. 检查 `checked/observed/rejected/probes`，过滤关闭时 `rejected` 必须为零；
+3. 确认更新耗时可接受后开启过滤，验证首次进入保留、离开返回抑制；
+4. 墙后遮挡不得误判，单帧噪声不得达到稳定 observed 门槛；
+5. Explorer 重启后记忆应清空，滚动占据图和 Planner 安全语义保持不变。
