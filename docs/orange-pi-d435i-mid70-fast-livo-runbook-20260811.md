@@ -406,6 +406,28 @@ docker inspect daib-foxglove --format '{{json .Args}}'
 Foxglove 没有客户端订阅时开销较低。订阅未压缩的 1280x720@30 Hz 原始 RGB 或多个
 大点云时，桥接序列化和网络流量才是主要开销。日常优先使用 10 Hz 图像和必要点云。
 
+RealSense 驱动运行在独立 drivers 容器，而 Foxglove bridge 运行在 algorithm 容器。
+ROS1 网络会传递消息，但不会跨容器传递 `.msg` 定义。旧 algorithm 镜像因此会对以下
+辅助话题报告空 schema：
+
+```text
+/camera/color/metadata       realsense2_camera/Metadata
+/camera/gyro/imu_info        realsense2_camera/IMUInfo
+/camera/accel/imu_info       realsense2_camera/IMUInfo
+```
+
+包含 RealSense 2.3.2 原始消息定义的修复镜像为：
+
+```text
+192.168.218.119:5050/daib-algorithm:sync-yyy-realsense-schema-20260813-arm64
+sha256:97e3291aace4770d6fcc9e683ec5bf539e15429e6ddfdc26ee9840d6ddf6d8a0
+```
+
+该修复只向 Foxglove workspace 添加 `Metadata.msg` 和 `IMUInfo.msg`，不在 algorithm
+容器中安装或启动完整 RealSense 驱动。两个消息类型的 ROS MD5 已与 drivers 镜像中的
+realsense-ros 2.3.2 核对一致。旧镜像中这些 schema 报错不影响 FAST-LIVO 主输入
+`/camera/imu`，但使用新镜像后 Foxglove 可以正常解析三个辅助话题。
+
 ## 9. 自由使用算法工作容器
 
 ### 9.1 设计原则
@@ -474,6 +496,106 @@ FAST-LIVO 启动后保持整套传感器静止约 5 秒，使约 1000 帧 D435i 
 
 如果 SSH 会话可能断开，使用板端已有的 `tmux` 保持交互会话。不要用不受管理的
 `nohup ... &` 启动多个同名算法节点，否则容易留下重复 publisher。
+
+### 9.4 手动启动 Explorer 和 EGO Planner
+
+FAST-LIVO 稳定发布 `/daib_slam/odom` 与 `/daib_slam/planning_cloud` 后，在独立终端
+启动 Planner：
+
+```bash
+docker exec -it daib-algorithm bash -lc '
+  source /opt/ros/noetic/setup.bash
+  source /opt/daib_ws/devel/setup.bash
+  exec roslaunch ego_planner daib_single_uav.launch
+'
+```
+
+必须使用 `daib_single_uav.launch`，不要使用仿真入口 `simple_run.launch`。该入口同时
+启动：
+
+- `daib_ego_bridge`，将 `/daib_explorer/goal` 校验并转发到 `/daib_ego/goal`；
+- EGO Planner，订阅 `/daib_slam/odom` 与 `/daib_explorer/planning_cloud`；
+- `traj_server`，输出 `/daib_ego/position_cmd`。
+
+当前 launch 不连接 PX4 或飞控。`/daib_ego/position_cmd` 只是控制器接口，单独启动
+Planner 不会让无人机运动。
+
+随后在另一个终端启动 Explorer。Planner 应先于 Explorer 启动，使它在 Explorer
+发布首个 goal 前已经订阅 `/daib_explorer/planning_cloud`。如果 Explorer 已在运行且
+存在锁存 goal，Planner 可能先收到 goal、后收到第一帧 planning cloud，并立即进入：
+
+```text
+Waiting for the first independent planning cloud.
+Depth Lost! EMERGENCY_STOP
+```
+
+当前急停状态不会因后续 cloud 到达自动恢复。遇到该状态时停止 Planner，确认
+planning cloud 正常，再按“Planner 先、Explorer 后”的顺序重启。
+
+启动检查：
+
+```bash
+rostopic hz /daib_explorer/planning_cloud
+rostopic echo /daib_ego/bridge_state
+rostopic echo -n 1 /daib_ego/goal
+rostopic info /daib_ego/position_cmd
+```
+
+Bridge 常见状态：
+
+- `WAIT_EXPLORER`：Explorer 未 ready 或 ready 心跳过期；
+- `WAIT_ODOM`：尚无新鲜 odometry；
+- `GOAL_FORWARDED`：goal 已通过校验并送入 EGO。
+
+### 9.5 EGO 障碍点云可视化
+
+在 Foxglove 3D 面板中将 Fixed Frame 设为 `camera_init`，添加以下 PointCloud2：
+
+```text
+/daib_explorer/planning_cloud
+/drone_0_ego_planner_node/grid_map/occupancy_inflate
+```
+
+两者含义不同：
+
+- `/daib_explorer/planning_cloud` 是 Explorer 送给 EGO 的原始 occupied 体素中心；
+- `/drone_0_ego_planner_node/grid_map/occupancy_inflate` 是按 EGO 分辨率和
+  `grid_map/obstacles_inflation` 膨胀后、真正参与碰撞检测的地图。
+
+可同时显示 `/daib_slam/odom` 对应的 `aft_mapped` TF 或 odometry pose，观察当前位置
+是否落入膨胀点云。当前 independent-cloud 模式使用 `grid_map/pose_type=2`，只更新
+`occupancy_buffer_inflate_`；因此：
+
+```text
+/drone_0_ego_planner_node/grid_map/occupancy
+```
+
+可能为空，不能用它判断 EGO 是否收到了障碍。
+
+以下日志表示轨迹起点本身已被膨胀地图占用：
+
+```text
+Current odometry position is inside the inflated planning map
+Initial trajectory is occupied: t=0.000
+Unable to find a free control point before collision
+```
+
+例如最近原始障碍为 `0.449 m`、膨胀半径为 `0.500 m` 时，EGO 会正确地拒绝从当前
+位置生成轨迹。此时先在 Foxglove 中判断近点是真实墙面、地面、自身机架还是传感器
+伪点，不要仅为消除日志直接降低障碍膨胀半径。
+
+### 9.6 开环 Planner 测试的预期日志
+
+仅观察 Planner、没有控制器执行 `/daib_ego/position_cmd` 时，真实 odometry 不会跟随
+EGO 生成的轨迹。随后可能持续出现：
+
+```text
+Tracking error exceeded replan threshold; anchor new trajectory to odometry
+```
+
+默认位置/速度阈值为 `0.5 m` 和 `0.8 m/s`。如果每次仍有 `plan_success=1`，说明规划
+链路可以生成轨迹；该警告不能用于评价闭环跟踪性能。若出现 `plan_success=0` 且日志
+同时报告起点占用，应先处理地图或机体附近点，而不是调优化器。
 
 ## 10. SSD 配置与权限
 

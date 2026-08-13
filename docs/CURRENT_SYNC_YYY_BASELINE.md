@@ -78,37 +78,29 @@ rosparam get /vio/img_point_cov
 5. Explorer frontier 基线测试先关闭 PVBSM scoring 和动态预算。
 6. 每次只改变一个模块或一组明确参数，并记录镜像 ID、命令和 ROS 参数值。
 
-## Explorer 快速 free/frontier 观察配置
+## Explorer free/frontier 默认配置
 
-实机观察中，默认 `64` 条射线和 `2 Hz / 512` frontier 更新会让 free 空间和
-frontier 的变化看起来偏慢。以下配置已验证适合临时调试观察：
+实机观察中，默认配置已固定为以下经过验证的平衡参数，free 空间和 frontier 的变化
+速度比旧的 `64` 条射线、`2 Hz / 512` frontier 更新更及时：
 
 ```yaml
 planning_output_radius_m: 12.0
 planning_sensor_range_m: 20.0
-max_raycasts_per_update: 512
-frontier_update_rate_hz: 10.0
-frontier_update_budget: 4096
+max_raycasts_per_update: 128
+frontier_update_rate_hz: 5.0
+frontier_update_budget: 1024
 ```
 
-这是一组调试性能配置，不改变默认 `explorer.yaml`。在容器内复制临时配置后启动：
+这组参数现在就是默认 `explorer.yaml`，直接启动 Explorer 即可：
 
 ```bash
-cp /opt/daib_ws/src/daib_explorer/config/explorer.yaml \
-   /tmp/explorer-fast-free.yaml
-sed -i \
-  -e 's/^max_raycasts_per_update: .*$/max_raycasts_per_update: 512/' \
-  -e 's/^frontier_update_rate_hz: .*$/frontier_update_rate_hz: 10.0/' \
-  -e 's/^frontier_update_budget: .*$/frontier_update_budget: 4096/' \
-  /tmp/explorer-fast-free.yaml
 roslaunch daib_explorer explorer.launch \
-  config:=/tmp/explorer-fast-free.yaml \
   pvbsm_memory_enabled:=false \
   pvbsm_scoring_enabled:=false
 ```
 
-启动日志应显示 `budgets=512 rays/4096 frontier`。该配置会增加 CPU 负载；正式运行
-前应根据板端温度和 LIO 耗时重新选择预算。
+启动日志应显示 `budgets=128 rays/1024 frontier`。如果板端 LIO EMA 持续超过负载阈值，
+Explorer 自带的动态预算会进一步降低探索工作量。
 
 ## 2026-08-12 实机发现：来源 cluster 消失后旧 goal 仍有效
 
