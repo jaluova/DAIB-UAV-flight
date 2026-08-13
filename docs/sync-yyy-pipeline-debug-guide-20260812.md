@@ -183,8 +183,9 @@ frontier，并不天然等价于人眼理解的“房间门口”。
 
 ### 5.4 cluster 怎样判定
 
-cluster 现在使用 planning voxel 的 6 邻域连通域，而不是把同一 `2 m` 空间桶
-直接当成一组。每个 frontier 在组成连通域前都会重新验证当前地图状态；已经变成
+cluster 现在使用 planning voxel 的 18 邻域连通域，而不是把同一 `2 m` 空间桶直接
+当成一组。frontier 合法性仍使用 6 邻域；18 邻域只负责分组，允许棱连接但不允许
+纯角点连接。每个 frontier 在组成连通域前都会重新验证当前地图状态；已经变成
 occupied、unknown 或不再满足 frontier 局部条件的旧点会被清掉。
 
 连通域小于 `min_frontier_cluster_cells` 的会被拒绝。当前默认值是 `10`，即连通块
@@ -410,7 +411,7 @@ submap，进而改变 unseen/coverage/observed-root 分数。调试纯 frontier 
 
 ### 7.4 已知策略风险
 
-- 当前使用 6 邻域连通聚类，稀疏对角 frontier 可能被切成许多小分量；
+- 18 邻域能连接棱相邻的稀疏斜向 frontier，但复杂交界处仍可能产生错误合并；
 - active goal 的来源 cluster 消失后不会立即撤销；
 - goal topic 是 latched，缺少显式 invalid 协议时还会产生显示残留；
 - cluster 大小不参与最终信息收益；

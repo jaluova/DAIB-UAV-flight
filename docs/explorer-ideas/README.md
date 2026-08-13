@@ -11,8 +11,8 @@
 
 ## 清单
 
-- [x] [01. 使用 6 邻域 BFS 定义合法 frontier cluster](01-connected-frontier-clusters.md)
-  - `已实现`。frontier 连通分量至少包含 10 个 planning voxel 才是合法 cluster。
+- [x] [01. 使用 18 邻域 BFS 定义合法 frontier cluster](01-connected-frontier-clusters.md)
+  - `已实现`。cluster 允许棱连接但不允许纯角点连接，且至少包含 10 个 planning voxel。
 - [x] [02. 发布最终入选 cluster 的 frontier](02-selected-cluster-frontiers-topic.md)
   - `已实现`。点云 topic 只显示实际产生当前 goal 的完整 frontier cluster。
 - [ ] [03. Explorer 全局 exploration memory](03-global-exploration-memory.md)

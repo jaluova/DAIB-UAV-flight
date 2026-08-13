@@ -140,10 +140,11 @@ blocked、stalled 或 timeout，Explorer 仍把旧 goal 保持为有效。默认
 验收必须覆盖：cluster 消失且没有新候选、cluster 消失且有替代候选、cluster 暂时
 抖动、Bridge 已转发旧 goal 四种场景。
 
-## 2026-08-12 cluster 最小连通块阈值
+## 2026-08-13 cluster 连通规则和最小阈值
 
-cluster 使用 planning voxel 的 6 邻域 BFS 连通分量。合法 cluster 至少包含
-10 个 voxel，因此配置为：
+frontier 合法性继续使用 planning voxel 的 6 邻域；cluster BFS 单独使用 18 邻域，
+允许通过棱相邻的 frontier 连通，但不合并仅在角点接触的 voxel。合法 cluster 至少
+包含 10 个 voxel，因此配置为：
 
 ```yaml
 min_frontier_cluster_cells: 10
