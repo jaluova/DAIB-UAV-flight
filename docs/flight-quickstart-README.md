@@ -30,6 +30,16 @@ D435i 的 USB/UVC 会话。不要手工重启驱动容器。
 ./scripts/start_flight_stack.sh --check-seconds 15 --camera-rate 6
 ```
 
+正常 LIVO + Explorer + EGO，仅观察目标点和规划路线，飞机仍由遥控器控制：
+
+```bash
+./scripts/start_explorer_planning_observe.sh --check-seconds 15 --camera-rate 8
+```
+
+该模式不会启动 MAVROS、PX4 offboard、SDK 或控制器。EGO 的命令被隔离到
+`/daib_observe/position_cmd_unconnected`，脚本只有确认该话题没有订阅者才会显示
+`[PASS]`。
+
 ## 飞行录包
 
 正常 LIVO 启动通过后，在第二个 SSH 终端执行：
@@ -116,4 +126,20 @@ LIVO 模式会显示 `normal LIVO mode`。Foxglove 连接：
 ws://<香橙派Wi-Fi地址>:8765
 ```
 
-当前脚本只启动定位和建图。Explorer、EGO-Planner、PX4/MAVROS 控制、自动探索和自动避障还没有接入当前飞行启动链路。
+## Explorer 与 EGO 观察
+
+Foxglove 3D 面板 Fixed Frame 选择 `camera_init`，加入：
+
+- `/daib_explorer/goal`：Explorer 选择的任务目标点。
+- `/daib_explorer/selected_cluster_frontiers`：产生当前目标的 frontier。
+- `/daib_explorer/planning_cloud`：提供给 EGO 的占据障碍点云。
+- `/drone_0_ego_planner_node/goal_point`：EGO 接受的目标 Marker。
+- `/drone_0_ego_planner_node/optimal_list`：EGO 当前规划轨迹 Marker。
+- `/drone_0_ego_planner_node/grid_map/occupancy_inflate`：EGO 膨胀障碍地图。
+
+Explorer 负责决定“去哪里”，EGO 负责生成局部避障轨迹。观察脚本同时运行两者，
+但不执行轨迹，因此不属于自动探索或自动避障飞行。停止时仍使用：
+
+```bash
+./scripts/stop_daib_stack.sh
+```

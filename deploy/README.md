@@ -373,6 +373,9 @@ Run these commands on the Orange Pi host from `/mnt/huawei_ssd/daib`:
 # Normal LIVO plus a camera-only, low-latency Foxglove stream.
 ./scripts/start_flight_stack.sh --check-seconds 15 --camera-rate 6
 
+# Normal LIVO + Explorer + EGO planning visualization; no flight-control link.
+./scripts/start_explorer_planning_observe.sh --check-seconds 15 --camera-rate 8
+
 # Stop Compose algorithm/drivers/roscore and legacy standalone containers.
 ./scripts/stop_daib_stack.sh
 ```
@@ -387,9 +390,12 @@ only the algorithm service. This keeps the RealSense USB/UVC session alive when
 the algorithm is restarted. Use `--restart-drivers` only when a driver restart
 is intentional or after changing the sensor mode.
 
-The current flight shortcuts start localization/mapping only. They do not
-start `DAIB-Explorer`, EGO-Planner, `daib_ego_bridge`, PX4/MAVROS offboard
-control, autonomous exploration, or obstacle-avoidance control.
+The regular flight shortcuts start localization/mapping only. The explicit
+Explorer/EGO observation shortcut additionally starts `DAIB-Explorer`,
+`daib_ego_bridge`, EGO-Planner and `traj_server`, but remaps PositionCommand to
+the unconnected `/daib_observe/position_cmd_unconnected` topic. None of these
+shortcuts starts PX4/MAVROS offboard, an SDK/controller, autonomous exploration
+execution or obstacle-avoidance control.
 
 Replay the newest recorded bag session with the host helper. It stops the live
 driver service before playback, keeps the persistent ROS Master, starts

@@ -125,6 +125,19 @@ Foxglove：
 ./scripts/start_flight_stack.sh --check-seconds 15 --camera-rate 6
 ```
 
+只观察 Explorer 目标点和 EGO 规划路线、仍由遥控器控制飞机时使用：
+
+```bash
+./scripts/start_explorer_planning_observe.sh --check-seconds 15 --camera-rate 8
+```
+
+该模式把 EGO 的 `PositionCommand` 强制输出到无订阅者的
+`/daib_observe/position_cmd_unconnected`，不会启动 MAVROS、PX4 offboard、SDK 或飞行
+控制器。Foxglove 的 Fixed Frame 使用 `camera_init`，主要显示
+`/daib_explorer/goal`、`/daib_explorer/selected_cluster_frontiers`、
+`/daib_explorer/planning_cloud` 和
+`/drone_0_ego_planner_node/optimal_list`。
+
 验收通过后，在第二个终端将 FAST-LIVO 的三个实机输入话题直接录到 SSD：
 
 ```bash
@@ -166,8 +179,8 @@ docker compose --env-file deploy/.env \
   -f deploy/compose.orange-pi-5-max.yml logs -f
 ```
 
-默认情况下，算法容器只启动 DAIB-LIVO 的 LIO 模式。完成传感器外参、时间戳和话题
-频率验证后，再启用相机 VIO、DAIB-Explorer、DAIB-Planner 和飞控链路。
+常规启动脚本默认只启动 DAIB-LIVO。Explorer/EGO 观察脚本会额外启动探索和规划，
+但仍与飞控链路隔离；只有完成选点、路线和故障行为验证后，才考虑接入控制器。
 
 ## 相关文档
 

@@ -116,6 +116,29 @@ ws://<香橙派的Wi-Fi地址>:8765
 
 Foxglove 只用于观察，网络卡顿不会直接造成 LIO 漂移。
 
+## Explorer + EGO 仅观察模式
+
+需要先看 Explorer 选点和 EGO 避障路线、但仍由遥控器飞行时执行：
+
+```bash
+cd /mnt/huawei_ssd/daib
+./scripts/start_explorer_planning_observe.sh --check-seconds 15 --camera-rate 8
+```
+
+脚本会启动正常 LIVO、Explorer、`daib_ego_bridge`、EGO-Planner、`traj_server` 和
+受限 topic 的 Foxglove Bridge。`traj_server` 的输出被强制改到
+`/daib_observe/position_cmd_unconnected`；脚本验证该话题没有订阅者，不启动
+MAVROS、PX4 offboard、SDK 或飞行控制器。
+
+Foxglove Fixed Frame 选择 `camera_init`，重点查看：
+
+- `/daib_explorer/goal`
+- `/daib_explorer/selected_cluster_frontiers`
+- `/daib_explorer/planning_cloud`
+- `/drone_0_ego_planner_node/goal_point`
+- `/drone_0_ego_planner_node/optimal_list`
+- `/drone_0_ego_planner_node/grid_map/occupancy_inflate`
+
 停止全部算法、驱动和 Foxglove：
 
 ```bash
@@ -124,18 +147,19 @@ Foxglove 只用于观察，网络卡顿不会直接造成 LIO 漂移。
 
 ## 当前功能边界
 
-当前一键脚本实际启动的是：
+常规飞行一键脚本实际启动的是：
 
 - MID-70 驱动。
 - D435i IMU 驱动。
 - FAST-LIVO 定位、建图和位姿输出。
 - 可选 Foxglove 图像转发。
 
-仓库里虽然已有 `DAIB-Explorer`、EGO-Planner 和 `daib_ego_bridge` 源码，算法镜像也会复制这些源码，但当前 Orange Pi Compose 和启动脚本**没有启动**：
+`start_explorer_planning_observe.sh` 会额外启动 Explorer、EGO-Planner 和
+`daib_ego_bridge`，但仍然**没有启动**：
 
-- Explorer frontier/目标生成节点。
-- EGO-Planner 局部轨迹规划节点。
-- `daib_ego_bridge` 到飞控的控制链路。
 - PX4/MAVROS offboard 控制和自动避障。
+- SDK/控制器轨迹执行链路。
 
-因此当前可以“手动飞 + 看 LIO 位姿/地图”，不能把当前命令当成自动探索或自动避障飞行命令。后续要实现自动探索，需要单独接通 Explorer → Planner → 飞控控制器，并完成台架和仿真验收。
+因此观察模式可以“手动飞 + 看 Explorer 目标 + 看 EGO 路线”，但不能把当前命令
+当成自动探索或自动避障飞行命令。后续要实现自动探索，需要单独接通 Planner →
+飞控控制器，并完成台架、急停和仿真验收。
