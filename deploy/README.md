@@ -264,24 +264,81 @@ docker compose --env-file deploy/.env -f deploy/compose.orange-pi-5-max.yml up -
 docker compose --env-file deploy/.env -f deploy/compose.orange-pi-5-max.yml logs -f
 ```
 
-For real sensors, the repository-level startup script is the preferred entry
-point. Run it on the Orange Pi host after connecting the D435i and MID-70:
+For real sensors, the repository-level startup scripts are the preferred entry
+points. Run one of these on the Orange Pi host after connecting the D435i and
+MID-70:
 
 ```bash
-./scripts/start_mid70_d435i_drivers.sh
+# LIO only: MID-70 + D435i IMU, camera disabled in FAST-LIVO.
+./scripts/start_lio_only.sh --check-seconds 15
+
+# Normal LIVO: MID-70 + D435i IMU + color image.
+./scripts/start_livo.sh --check-seconds 15
+
+# Normal LIVO plus a low-latency camera-only Foxglove stream.
+./scripts/start_flight_stack.sh --check-seconds 15 --camera-rate 6
 ```
 
-It validates the Compose configuration, starts the algorithm service, recreates
-the privileged driver service so newly attached USB devices are visible, and
-checks the LiDAR, IMU and image rates and timestamp alignment. The default check
-lasts 8 seconds; use `--check-seconds 15` for a longer sample. A successful run
-ends with `[PASS] D435i and MID-70 are ready`.
+These scripts validate the Compose configuration, keep the persistent ROS
+Master, reuse a healthy driver container, and automatically recreate drivers if
+the container cannot see the configured LiDAR interface or route. They check
+the LiDAR, IMU and (in LIVO mode) image rates and timestamp alignment. A
+successful run ends with `[PASS] LIO-only stack is ready`.
+
+For flight preparation, use the camera-first wrapper instead. It runs the same
+sensor checks, then replaces the default all-topic Foxglove Bridge with a
+camera-only, low-latency stream. The default is a 6 Hz raw image stream with a
+4 MB send buffer so congestion drops frames instead of accumulating latency:
+
+```bash
+./scripts/start_flight_stack.sh
+```
+
+Runtime controls are available without editing the script:
+
+```bash
+./scripts/start_flight_stack.sh \
+  --check-seconds 15 \
+  --camera-rate 6 \
+  --port 8765
+```
+
+The Foxglove image topic is
+`/camera/color/image_fast_livo_foxglove`. FAST-LIVO continues to consume the
+unmodified local `/camera/color/image_fast_livo` stream; only the remote
+Foxglove copy is rate-limited.
+
+To run LIO without the camera pipeline, use:
+
+```bash
+./scripts/start_lio_only.sh
+```
+
+This mode recreates the algorithm container with `use_camera:=false`, mounts
+the repository calibration file read-only, and enables only the D435i
+gyroscope/accelerometer plus the MID-70. ROS Master runs in the persistent
+`roscore` service, so recreating the algorithm container does not invalidate
+the running driver nodes. The script reuses a healthy, registered driver
+container and validates LiDAR/IMU rates and synchronization. Foxglove remains
+enabled for LIO outputs; disable it with `LIO_ENABLE_FOXGLOVE=false`.
 
 After that check passes, record the three FAST-LIVO input topics with:
 
 ```bash
 ./scripts/record_fast_livo_inputs.sh
 ```
+
+The default recording keeps FAST-LIVO's approximately 10 Hz image stream. To
+inspect a near-real-time camera view later on a computer, include the raw
+approximately 30 Hz image as well:
+
+```bash
+./scripts/record_fast_livo_inputs.sh --min-free-gb 20 --include-raw-image
+```
+
+This increases bag size substantially. In Foxglove playback, select
+`/camera/color/image_raw` for the high-rate view; the algorithm input remains
+`/camera/color/image_fast_livo`.
 
 The recorder discovers the host directory mounted at `/bags` and writes to
 `BAGS_DIR/fast_livo_real/<timestamp>/`. The result is immediately available to
@@ -302,26 +359,60 @@ Foxglove Desktop with `ws://<orange-pi-ip>:8765`. FAST-LIVO publishes its map
 and registered clouds in `camera_init`, so use `camera_init` as the 3D panel's
 fixed frame.
 
-To replay a bag instead of using live sensors, set `BAG_FILE` to a path below
-the container's read-only `/bags` mount. For example:
+### Flight startup shortcuts
 
-```dotenv
-BAGS_DIR=/mnt/ssd/bags
-BAG_FILE=/bags/fast_livo_real/20260807_162735/fast_livo_inputs_20260807_162735_0.bag
-BAG_RATE=0.5
-BAG_LOOP=false
-```
-
-Then recreate only the algorithm service so the hardware drivers do not
-publish duplicate sensor topics:
+Run these commands on the Orange Pi host from `/mnt/huawei_ssd/daib`:
 
 ```bash
-docker compose --env-file deploy/.env -f deploy/compose.orange-pi-5-max.yml \
-  up -d --no-build --no-deps --force-recreate algorithm
+# LiDAR + D435i IMU only; camera is not used by FAST-LIVO.
+./scripts/start_lio_only.sh --check-seconds 15
+
+# Normal LIVO; D435i color/depth images participate in FAST-LIVO.
+./scripts/start_livo.sh --check-seconds 15
+
+# Normal LIVO plus a camera-only, low-latency Foxglove stream.
+./scripts/start_flight_stack.sh --check-seconds 15 --camera-rate 6
+
+# Stop Compose algorithm/drivers/roscore and legacy standalone containers.
+./scripts/stop_daib_stack.sh
 ```
 
-When the bag finishes, FAST-LIVO and Foxglove remain available so the final map
-can still be inspected. Clear `BAG_FILE` before returning to live sensors.
+All startup scripts validate the sensor streams and perform a best-effort
+clock check before starting ROS. The board has no usable hardware RTC; if NTP
+is unavailable, the scripts restore the last known-good clock value when
+possible and report a warning.
+
+The startup scripts reuse a healthy `drivers` container by default and recreate
+only the algorithm service. This keeps the RealSense USB/UVC session alive when
+the algorithm is restarted. Use `--restart-drivers` only when a driver restart
+is intentional or after changing the sensor mode.
+
+The current flight shortcuts start localization/mapping only. They do not
+start `DAIB-Explorer`, EGO-Planner, `daib_ego_bridge`, PX4/MAVROS offboard
+control, autonomous exploration, or obstacle-avoidance control.
+
+Replay the newest recorded bag session with the host helper. It stops the live
+driver service before playback, keeps the persistent ROS Master, starts
+FAST-LIVO and the all-topic Foxglove Bridge, and selects the newest session
+below `BAGS_DIR/fast_livo_real`, including all split bag files in that session:
+
+```bash
+./scripts/start_bag_play.sh --rate 1.0
+```
+
+Pass an explicit host file, host directory, or `/bags` path as the final
+argument when needed.
+Use `--rate 0.5` only when deliberately inspecting the data in slow motion.
+`--rate` controls playback only; recording always preserves the messages and
+timestamps received in real time. The recorded image topic is FAST-LIVO's
+nominal 10 Hz `/camera/color/image_fast_livo`, while the flight Foxglove stream
+is an independent 6 Hz preview topic. When playback finishes, FAST-LIVO and
+Foxglove remain available so the final map can still be inspected. Return to
+live sensors with:
+
+```bash
+./scripts/start_flight_stack.sh --check-seconds 15 --camera-rate 6
+```
 
 The Compose file uses the current Compose specification. If the Compose plugin
 is unavailable, install a compatible `docker-compose` binary and use:

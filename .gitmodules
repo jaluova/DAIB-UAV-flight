@@ -1,6 +1,6 @@
 [submodule "src/DAIB-LIVO"]
 	path = src/DAIB-LIVO
-	url = https://github.com/jaluova/DAIB-LIVO.git
+	url = https://github.com/LBY-114514/DAIB-LIVO-flight.git
 [submodule "src/DAIB-Planner"]
 	path = src/DAIB-Planner
 	url = https://github.com/jaluova/DAIB-Planner.git

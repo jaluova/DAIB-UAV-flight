@@ -34,13 +34,16 @@ if (($#)); then
   exec "$@"
 fi
 
-bag_file="${BAG_FILE:-}"
+bag_files_spec="${BAG_FILES:-${BAG_FILE:-}}"
 launch_spec="${ALGORITHM_LAUNCH:-fast_livo mapping_mid70_d435i.launch rviz:=false use_camera:=false}"
-if [[ -n "$bag_file" ]]; then
-  [[ -r "$bag_file" ]] || {
-    echo "BAG_FILE is not readable: $bag_file" >&2
-    exit 1
-  }
+read -r -a bag_files <<< "$bag_files_spec"
+if ((${#bag_files[@]})); then
+  for bag_file in "${bag_files[@]}"; do
+    [[ -r "$bag_file" ]] || {
+      echo "bag file is not readable: $bag_file" >&2
+      exit 1
+    }
+  done
   rosparam set /use_sim_time true
   launch_spec="${BAG_ALGORITHM_LAUNCH:-fast_livo mapping_mid70_d435i.launch rviz:=false use_camera:=true}"
 else
@@ -58,12 +61,12 @@ if [[ "${ENABLE_FOXGLOVE:-true}" == "true" ]]; then
   children+=("$!")
 fi
 
-if [[ -n "$bag_file" ]]; then
+if ((${#bag_files[@]})); then
   bag_args=(--clock "--rate=${BAG_RATE:-1.0}" "--delay=${BAG_DELAY:-2.0}")
   if [[ "${BAG_LOOP:-false}" == "true" ]]; then
     bag_args+=(--loop)
   fi
-  rosbag play "${bag_args[@]}" "$bag_file" &
+  rosbag play "${bag_args[@]}" "${bag_files[@]}" &
   children+=("$!")
 fi
 

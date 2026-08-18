@@ -119,6 +119,10 @@ RUN --mount=type=cache,target=/opt/daib_ws/build,sharing=locked \
          -DSophus_DIR=/usr/local/lib/cmake/Sophus \
          "-DFAST_LIVO_ARM_FLAGS=${FAST_LIVO_ARM_FLAGS}"
 
+COPY deploy/scripts/check_sensor_timing.py \
+  /opt/daib_ws/src/fast_livo/scripts/check_sensor_timing.py
+RUN chmod +x /opt/daib_ws/src/fast_livo/scripts/check_sensor_timing.py
+
 COPY deploy/scripts/algorithm-entrypoint.sh /usr/local/bin/algorithm-entrypoint
 RUN chmod +x /usr/local/bin/algorithm-entrypoint
 

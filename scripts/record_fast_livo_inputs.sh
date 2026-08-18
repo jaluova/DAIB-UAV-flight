@@ -10,6 +10,7 @@ MIN_FREE_GB=10
 MAX_MINUTES=0
 CHECK_INTERVAL_SECONDS=5
 START_IMAGE_THROTTLE=false
+INCLUDE_RAW_IMAGE=false
 
 TOPICS=(
   /livox/lidar
@@ -25,6 +26,9 @@ Options:
   --output-dir DIR   Host output directory (default: BAGS_DIR/fast_livo_real)
   --min-free-gb N    Stop before free space falls below N GiB (default: 10)
   --max-minutes N    Stop after N minutes; 0 means Ctrl+C only (default: 0)
+  --include-raw-image
+                     Also record /camera/color/image_raw (about 30 Hz) for
+                     near-real-time replay; increases bag size substantially
   -h, --help         Show this help
 EOF
 }
@@ -51,6 +55,10 @@ while (($#)); do
       MAX_MINUTES="$2"
       shift 2
       ;;
+    --include-raw-image)
+      INCLUDE_RAW_IMAGE=true
+      shift
+      ;;
     -h|--help)
       usage
       exit 0
@@ -70,6 +78,10 @@ done
   || fail "--min-free-gb must be between 1 and 1000"
 (( MAX_MINUTES >= 0 && MAX_MINUTES <= 1440 )) \
   || fail "--max-minutes must be between 0 and 1440"
+
+if [[ "$INCLUDE_RAW_IMAGE" == "true" ]]; then
+  TOPICS+=(/camera/color/image_raw)
+fi
 
 [[ "$(uname -s)" == "Linux" ]] \
   || fail "this script must run on the Orange Pi Linux host"
@@ -109,6 +121,8 @@ mkdir "$LOCK_DIR" 2>/dev/null \
 trap 'rmdir "$LOCK_DIR" 2>/dev/null || true' EXIT
 
 ROS_ENV='source /opt/ros/noetic/setup.bash; source /opt/daib_ws/devel/setup.bash; export ROS_MASTER_URI=http://127.0.0.1:11311; export ROS_HOSTNAME=127.0.0.1; unset ROS_IP'
+TIMING_ROS_ENV='source /opt/ros/noetic/setup.bash; source /opt/drivers_ws/devel/setup.bash; export ROS_MASTER_URI=http://127.0.0.1:11311; export ROS_HOSTNAME=127.0.0.1; unset ROS_IP'
+TIMING_CHECKER='/opt/drivers_ws/src/livox_ros_driver/scripts/check_sensor_timing.py'
 
 echo "[1/4] Checking required FAST-LIVO topics"
 for topic in /livox/lidar /camera/imu; do
@@ -116,14 +130,16 @@ for topic in /livox/lidar /camera/imu; do
     "$ROS_ENV; rostopic type '$topic' 2>/dev/null")" \
     || fail "topic is unavailable: ${topic}"
   [[ -n "$topic_type" ]] || fail "topic has no type: ${topic}"
-  "${COMPOSE[@]}" exec -T algorithm bash -lc \
-    "$ROS_ENV; timeout 4 rostopic echo -n 1 '$topic/header/stamp' >/dev/null" \
-    || fail "topic has no current message: ${topic}"
   printf '  %-38s %s\n' "$topic" "$topic_type"
 done
 
-if "${COMPOSE[@]}" exec -T algorithm bash -lc \
-    "$ROS_ENV; timeout 3 rostopic echo -n 1 '/camera/color/image_fast_livo/header/stamp' >/dev/null 2>&1"; then
+timing_log="$(mktemp)"
+trap 'rm -f "$timing_log"; rmdir "$LOCK_DIR" 2>/dev/null || true' EXIT
+if "${COMPOSE[@]}" exec -T drivers bash -lc \
+    "$TIMING_ROS_ENV; python3 '$TIMING_CHECKER' --duration 4 --warmup 0.5 --validate \
+      --image-topic /camera/color/image_fast_livo \
+      --image-rate-min 8 --image-rate-max 12 \
+      --image-nearest-max-ms 60" >"$timing_log" 2>&1; then
   image_type="$("${COMPOSE[@]}" exec -T algorithm bash -lc \
     "$ROS_ENV; rostopic type /camera/color/image_fast_livo")"
   printf '  %-38s %s (existing 10 Hz stream)\n' \
@@ -134,12 +150,37 @@ else
     || fail "neither FAST-LIVO nor raw camera image is available"
   [[ "$image_type" == "sensor_msgs/Image" ]] \
     || fail "unexpected raw image type: ${image_type}"
-  "${COMPOSE[@]}" exec -T algorithm bash -lc \
-    "$ROS_ENV; timeout 4 rostopic echo -n 1 '/camera/color/image_raw/header/stamp' >/dev/null" \
-    || fail "raw camera image has no current message"
+  "${COMPOSE[@]}" exec -T drivers bash -lc \
+    "$TIMING_ROS_ENV; python3 '$TIMING_CHECKER' --duration 4 --warmup 0.5 --validate" \
+    >"$timing_log" 2>&1 || {
+      cat "$timing_log" >&2
+      fail "LiDAR, IMU or raw camera stream failed timing validation"
+    }
   START_IMAGE_THROTTLE=true
   printf '  %-38s %s (recorder will create a 10 Hz stream)\n' \
     /camera/color/image_fast_livo "$image_type"
+fi
+cat "$timing_log"
+rm -f "$timing_log"
+trap 'rmdir "$LOCK_DIR" 2>/dev/null || true' EXIT
+
+if [[ "$INCLUDE_RAW_IMAGE" == "true" ]]; then
+  raw_timing_log="$(mktemp)"
+  if ! "${COMPOSE[@]}" exec -T drivers bash -lc \
+      "$TIMING_ROS_ENV; python3 '$TIMING_CHECKER' --duration 4 --warmup 0.5 --validate \
+        --image-topic /camera/color/image_raw \
+        --image-rate-min 20 --image-rate-max 35 \
+        --image-nearest-max-ms 100" >"$raw_timing_log" 2>&1; then
+    cat "$raw_timing_log" >&2
+    rm -f "$raw_timing_log"
+    fail "raw camera image timing validation failed"
+  fi
+  cat "$raw_timing_log"
+  rm -f "$raw_timing_log"
+  raw_image_type="$(${COMPOSE[@]} exec -T algorithm bash -lc \
+    "$ROS_ENV; rostopic type /camera/color/image_raw")"
+  printf '  %-38s %s (recording raw camera frames)\n' \
+    /camera/color/image_raw "$raw_image_type"
 fi
 
 available_kib="$(df -Pk "$OUTPUT_ROOT" | awk 'NR == 2 {print $4}')"
@@ -216,19 +257,15 @@ START_MONOTONIC="$(date +%s)"
   echo "recorder_started_time_local=$(date --iso-8601=ns)"
   echo "recorder_started_time_epoch_ns=$(date +%s%N)"
   echo
-  echo "sensor_headers_after_recorder_start:"
-  echo "# Two headers are captured because D435i IMU sends one cached sample first."
+  echo "sensor_timing_after_recorder_start:"
 } >> "$METADATA_FILE"
 
-for topic in /livox/lidar /camera/imu /camera/color/image_raw \
-    /camera/color/image_fast_livo /camera/color/camera_info; do
-  {
-    echo "topic=${topic}"
-    "${COMPOSE[@]}" exec -T algorithm bash -lc \
-      "$ROS_ENV; timeout 4 rostopic echo -n 2 '$topic/header' 2>/dev/null" \
-      || echo "headers=unavailable"
-  } >> "$METADATA_FILE"
-done
+"${COMPOSE[@]}" exec -T drivers bash -lc \
+  "$TIMING_ROS_ENV; python3 '$TIMING_CHECKER' --duration 2 --warmup 0.5 \
+    --image-topic /camera/color/image_fast_livo \
+    --image-rate-min 8 --image-rate-max 12 \
+    --image-nearest-max-ms 60" \
+  >> "$METADATA_FILE" 2>&1 || echo "sensor_timing=unavailable" >> "$METADATA_FILE"
 
 request_stop() {
   STOP_REASON="manual Ctrl+C"

@@ -102,8 +102,9 @@ BUILD_JOBS=1 ./deploy/scripts/build-openeuler-arm64-images.sh
 BUILD_JOBS=1 ./deploy/scripts/build-algorithm-image.sh
 ```
 
-构建结果写入 `dist/`。镜像基于 openEuler 24.03 LTS，算法容器包含 ROS Master、
-三个 DAIB 算法模块和 Foxglove Bridge；驱动容器包含 RealSense 与 Livox 驱动。
+构建结果写入 `dist/`。镜像基于 openEuler 24.03 LTS。运行时使用独立、长期运行的
+`roscore` 服务；算法容器包含三个 DAIB 算法模块和 Foxglove Bridge，驱动容器包含
+RealSense 与 Livox 驱动。
 
 详细依赖、代理配置和镜像传输流程见 [部署说明](deploy/README.md)。
 
@@ -117,16 +118,42 @@ docker compose --env-file deploy/.env \
   -f deploy/compose.orange-pi-5-max.yml up -d --no-build
 ```
 
-接好 D435i 和 MID-70 后，推荐用宿主机脚本启动并验收，而不是只检查容器状态：
+接好 D435i 和 MID-70 后，推荐用宿主机脚本启动 LIVO、验收传感器，并配置低延迟
+Foxglove：
 
 ```bash
-./scripts/start_mid70_d435i_drivers.sh
+./scripts/start_flight_stack.sh --check-seconds 15 --camera-rate 6
 ```
 
-验收通过后可以录制 FAST-LIVO 的三个实机输入话题：
+验收通过后，在第二个终端将 FAST-LIVO 的三个实机输入话题直接录到 SSD：
 
 ```bash
-./scripts/record_fast_livo_inputs.sh
+./scripts/record_fast_livo_inputs.sh --min-free-gb 20
+```
+
+如果需要把接近相机原始帧率的图像带回电脑回放，额外录制约 30 Hz 的原始图像：
+
+```bash
+./scripts/record_fast_livo_inputs.sh --min-free-gb 20 --include-raw-image
+```
+
+安全结束录制后，回放最新录包目录的全部分卷并通过 Foxglove 查看：
+
+```bash
+./scripts/start_bag_play.sh --rate 1.0
+```
+
+`--rate 1.0` 按实时速度回放；需要慢速排查时才改为 `--rate 0.5`。回放倍率不会
+改变 bag 中已经记录的数据。录制脚本保存 MID-70
+约 10 Hz、D435i IMU 约 200 Hz，以及 FAST-LIVO 实际消费的标称 10 Hz 图像；使用
+`--include-raw-image` 时还会保存约 30 Hz 的 `/camera/color/image_raw`。
+Foxglove 的 6 Hz 网络预览是独立话题，不影响算法和 rosbag。完整现场流程见
+[Orange Pi 飞行快速说明](docs/flight-quickstart-README.md)。
+
+结束回放或飞行后停止全部服务：
+
+```bash
+./scripts/stop_daib_stack.sh
 ```
 
 查看运行状态：
@@ -152,6 +179,7 @@ docker compose --env-file deploy/.env \
 - [DAIB-Explorer 架构](src/DAIB-Explorer/docs/ARCHITECTURE.md)
 - [DAIB-Planner 集成接口](src/DAIB-Planner/docs/DAIB_INTEGRATION.md)
 - [Orange Pi 容器部署](deploy/README.md)
+- [Orange Pi 飞行、录包与回放快速说明](docs/flight-quickstart-README.md)
 - [完整 PX4 数据链路](docs/px4-full-pipeline.md)
 - [MID-70 与 D435i 外参标定](docs/mid70-d435i-manual-extrinsic-calibration.md)
 

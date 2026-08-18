@@ -1,0 +1,14 @@
+services:
+  algorithm:
+    environment:
+      ALGORITHM_LAUNCH: ${DAIB_ALGORITHM_LAUNCH:-fast_livo mapping_mid70_d435i.launch rviz:=false use_camera:=false}
+      ENABLE_FOXGLOVE: ${LIO_ENABLE_FOXGLOVE:-true}
+    volumes:
+      - ../src/DAIB-LIVO/config/mid70_d435i.yaml:/opt/daib_ws/src/fast_livo/config/mid70_d435i.yaml:ro
+      - ./scripts/check_sensor_timing.py:/opt/daib_ws/src/fast_livo/scripts/check_sensor_timing.py:ro
+
+  drivers:
+    environment:
+      REALSENSE_ARGS: ${DAIB_REALSENSE_ARGS:-enable_depth:=false enable_color:=false enable_gyro:=true enable_accel:=true unite_imu_method:=linear_interpolation}
+    volumes:
+      - ./scripts/check_sensor_timing.py:/opt/drivers_ws/src/livox_ros_driver/scripts/check_sensor_timing.py:ro

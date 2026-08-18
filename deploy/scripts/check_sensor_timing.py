@@ -31,8 +31,11 @@ class TimingCheck:
             return
         self.record("lidar", msg)
         self.point_counts.append(msg.point_num)
-        max_offset = max((point.offset_time for point in msg.points), default=0)
-        self.scan_durations.append(max_offset * 1e-9)
+        # Livox points are ordered by offset_time; avoid an O(N) Python scan
+        # for every ~10k-point frame on the ARM64 board.
+        last_point = msg.points[-1] if msg.points else None
+        self.scan_durations.append(
+            (last_point.offset_time if last_point is not None else 0) * 1e-9)
 
     def imu_callback(self, msg):
         self.record("imu", msg)
@@ -121,13 +124,15 @@ def nearest_metrics(reference_name, check):
     return {"abs_p95_ms": percentile(differences, 0.95) * 1000.0}
 
 
-def validate(check):
+def validate(check, include_image=True, image_rate_limits=(25.0, 35.0),
+             image_nearest_max_ms=25.0):
     failures = []
     rate_limits = {
         "lidar": (8.0, 12.0),
         "imu": (150.0, 260.0),
-        "image": (25.0, 35.0),
     }
+    if include_image:
+        rate_limits["image"] = image_rate_limits
     for name, (minimum, maximum) in rate_limits.items():
         metrics = stream_metrics(name, check)
         if metrics is None:
@@ -142,8 +147,9 @@ def validate(check):
 
     arrival_lag_limits = {
         "imu": (-20.0, 80.0),
-        "image": (-20.0, 120.0),
     }
+    if include_image:
+        arrival_lag_limits["image"] = (-20.0, 120.0)
     for name, (minimum_ms, maximum_ms) in arrival_lag_limits.items():
         metrics = arrival_lag_metrics(name, check)
         if metrics is None:
@@ -178,7 +184,9 @@ def validate(check):
                     "lidar scan-end arrival lag median %.3f ms is outside -20..80 ms" %
                     scan_end_lag_ms)
 
-    nearest_limits = {"imu": 10.0, "image": 25.0}
+    nearest_limits = {"imu": 10.0}
+    if include_image:
+        nearest_limits["image"] = image_nearest_max_ms
     for name, maximum_ms in nearest_limits.items():
         metrics = nearest_metrics(name, check)
         if metrics is None:
@@ -204,19 +212,41 @@ def main():
     parser.add_argument("--warmup", type=float, default=1.0)
     parser.add_argument("--validate", action="store_true",
                         help="Fail if rates or synchronization exceed rig limits.")
+    parser.add_argument("--lio-only", action="store_true",
+                        help="Validate LiDAR and IMU without subscribing to "
+                             "images.")
+    parser.add_argument("--image-topic",
+                        default="/camera/color/image_raw",
+                        help="Image topic to measure (default: %(default)s).")
+    parser.add_argument("--image-rate-min", type=float, default=25.0,
+                        help="Minimum accepted image rate (default: %(default)s).")
+    parser.add_argument("--image-rate-max", type=float, default=35.0,
+                        help="Maximum accepted image rate (default: %(default)s).")
+    parser.add_argument("--image-nearest-max-ms", type=float, default=25.0,
+                        help="Maximum image-to-LiDAR nearest timestamp p95 in ms "
+                             "(default: %(default)s).")
     args = parser.parse_args(rospy.myargv()[1:])
+    if args.image_rate_min <= 0.0 or args.image_rate_max < args.image_rate_min:
+        parser.error("image rate limits must satisfy 0 < min <= max")
+    if args.image_nearest_max_ms <= 0.0:
+        parser.error("--image-nearest-max-ms must be positive")
 
+    # This diagnostic node only consumes topics.  Publishing its own rosout
+    # messages can recurse on boards whose ROS1 Python clock is not initialized
+    # yet, so keep diagnostics local to stdout/stderr.
     rospy.init_node("fast_livo_sensor_timing_check", anonymous=True,
-                    disable_signals=True)
+                    disable_signals=True, disable_rosout=True)
     check = TimingCheck()
     subscribers = [
         rospy.Subscriber("/livox/lidar", CustomMsg, check.lidar_callback,
                          queue_size=100),
         rospy.Subscriber("/camera/imu", Imu, check.imu_callback,
                          queue_size=1000),
-        rospy.Subscriber("/camera/color/image_raw", Image,
-                         check.image_callback, queue_size=100),
     ]
+    if not args.lio_only:
+        subscribers.append(
+            rospy.Subscriber(args.image_topic, Image,
+                             check.image_callback, queue_size=100))
 
     time.sleep(max(0.0, args.warmup))
     check.capturing = True
@@ -226,7 +256,9 @@ def main():
     check.capturing = False
 
     print("capture_duration=%.3f s" % (time.monotonic() - start))
-    for name in ("lidar", "imu", "image"):
+    stream_names = (("lidar", "imu") if args.lio_only
+                    else ("lidar", "imu", "image"))
+    for name in stream_names:
         print_stream(name, check)
     if check.point_counts:
         print("lidar_points: median=%d range=%d..%d scan_duration_median=%.3f ms" %
@@ -234,9 +266,14 @@ def main():
                min(check.point_counts), max(check.point_counts),
                statistics.median(check.scan_durations) * 1000.0))
     print_nearest("imu", check)
-    print_nearest("image", check)
+    if not args.lio_only:
+        print_nearest("image", check)
 
-    valid = not args.validate or validate(check)
+    valid = not args.validate or validate(
+        check,
+        include_image=not args.lio_only,
+        image_rate_limits=(args.image_rate_min, args.image_rate_max),
+        image_nearest_max_ms=args.image_nearest_max_ms)
 
     # Keep references alive until all callbacks have stopped.
     del subscribers

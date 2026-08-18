@@ -1,4 +1,19 @@
 services:
+  roscore:
+    image: ${ALGORITHM_IMAGE:-daib-algorithm:openeuler-arm64}
+    network_mode: host
+    restart: unless-stopped
+    entrypoint:
+      - /bin/bash
+      - -lc
+      - source /opt/ros/noetic/setup.bash; exec roscore
+    healthcheck:
+      test: ["CMD-SHELL", "bash -lc 'source /opt/ros/noetic/setup.bash && rosparam list >/dev/null 2>&1'"]
+      interval: 2s
+      timeout: 2s
+      retries: 15
+      start_period: 3s
+
   algorithm:
     image: ${ALGORITHM_IMAGE:-daib-algorithm:openeuler-arm64}
     build:
@@ -16,18 +31,23 @@ services:
     volumes:
       - ${DATA_DIR:-/mnt/ssd/data}:/data
       - ${BAGS_DIR:-/mnt/ssd/bags}:/bags:ro
+      - ./scripts/algorithm-entrypoint.sh:/usr/local/bin/algorithm-entrypoint:ro
     environment:
       ROS_MASTER_URI: http://127.0.0.1:11311
       ROS_HOSTNAME: 127.0.0.1
-      START_ROS_MASTER: "true"
+      START_ROS_MASTER: "false"
       ALGORITHM_LAUNCH: ${ALGORITHM_LAUNCH:-fast_livo mapping_mid70_d435i.launch rviz:=false use_camera:=false}
       BAG_ALGORITHM_LAUNCH: ${BAG_ALGORITHM_LAUNCH:-fast_livo mapping_mid70_d435i.launch rviz:=false use_camera:=true}
       ENABLE_FOXGLOVE: ${ENABLE_FOXGLOVE:-true}
       FOXGLOVE_PORT: ${FOXGLOVE_PORT:-8765}
       BAG_FILE: ${BAG_FILE:-}
+      BAG_FILES: ${BAG_FILES:-}
       BAG_RATE: ${BAG_RATE:-1.0}
       BAG_DELAY: ${BAG_DELAY:-2.0}
       BAG_LOOP: ${BAG_LOOP:-false}
+    depends_on:
+      roscore:
+        condition: service_healthy
     healthcheck:
       test: ["CMD-SHELL", "bash -lc 'source /opt/ros/noetic/setup.bash && rosparam list >/dev/null 2>&1'"]
       interval: 5s
@@ -50,7 +70,7 @@ services:
       - /dev:/dev
       - ${DATA_DIR:-/mnt/ssd/data}:/data
     depends_on:
-      algorithm:
+      roscore:
         condition: service_healthy
     environment:
       ROS_MASTER_URI: http://127.0.0.1:11311
