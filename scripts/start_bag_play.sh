@@ -206,7 +206,7 @@ if [[ "$EXPLORER_OBSERVE" == "true" ]]; then
   explorer_ready=false
   for _ in $(seq 1 40); do
     if container_ros \
-        "timeout --foreground --kill-after=0.2 1.5 rostopic echo -n 1 /daib_explorer/ready 2>/dev/null | grep -Eiq 'data:[[:space:]]*true'"; then
+        "timeout --kill-after=0.2 1.5 rostopic echo -n 1 /daib_explorer/ready 2>/dev/null | grep -Eiq 'data:[[:space:]]*true'"; then
       explorer_ready=true
       break
     fi
