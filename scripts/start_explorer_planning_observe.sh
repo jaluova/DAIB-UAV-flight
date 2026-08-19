@@ -180,7 +180,7 @@ echo "[3/7] Waiting for synchronized Explorer inputs"
 explorer_ready=false
 for _ in $(seq 1 40); do
   if container_ros \
-      "timeout --kill-after=0.2 1.5 rostopic echo -n 1 /daib_explorer/ready 2>/dev/null | grep -Eiq 'data:[[:space:]]*true'"; then
+      "python3 -c 'import rospy; from std_msgs.msg import Bool; rospy.init_node(\"daib_ready_check\", anonymous=True, disable_rosout=True); msg=rospy.wait_for_message(\"/daib_explorer/ready\", Bool, timeout=1.5); raise SystemExit(0 if msg.data else 1)' 2>/dev/null"; then
     explorer_ready=true
     break
   fi
