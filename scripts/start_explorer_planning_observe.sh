@@ -12,6 +12,7 @@ FOXGLOVE_PORT="${FOXGLOVE_PORT:-8765}"
 SEND_BUFFER_LIMIT="${FOXGLOVE_SEND_BUFFER_LIMIT:-16000000}"
 MAX_VEL="${EGO_OBSERVE_MAX_VEL:-0.5}"
 MAX_ACC="${EGO_OBSERVE_MAX_ACC:-1.0}"
+EXPLORER_GOAL_STALL_TIMEOUT_S="${EXPLORER_GOAL_STALL_TIMEOUT_S:-6.0}"
 RESTART_DRIVERS=false
 CAMERA_SOURCE_TOPIC="/camera/color/image_fast_livo"
 CAMERA_OUTPUT_TOPIC="/camera/color/image_fast_livo_foxglove"
@@ -34,6 +35,8 @@ Options:
   -h, --help          Show this help
 
 This script does not start MAVROS, PX4 offboard, DJI SDK or a flight controller.
+Explorer replaces a goal after ${EXPLORER_GOAL_STALL_TIMEOUT_S}s without progress;
+override with EXPLORER_GOAL_STALL_TIMEOUT_S for a slower or faster platform.
 EOF
 }
 
@@ -99,6 +102,10 @@ awk -v value="$MAX_VEL" 'BEGIN { exit !(value > 0 && value <= 2) }' \
   || fail "--max-vel must be greater than 0 and at most 2"
 awk -v value="$MAX_ACC" 'BEGIN { exit !(value > 0 && value <= 3) }' \
   || fail "--max-acc must be greater than 0 and at most 3"
+[[ "$EXPLORER_GOAL_STALL_TIMEOUT_S" =~ ^[0-9]+([.][0-9]+)?$ ]] \
+  || fail "EXPLORER_GOAL_STALL_TIMEOUT_S must be numeric"
+awk -v value="$EXPLORER_GOAL_STALL_TIMEOUT_S" 'BEGIN { exit !(value >= 1 && value <= 60) }' \
+  || fail "EXPLORER_GOAL_STALL_TIMEOUT_S must be between 1 and 60 seconds"
 [[ "$FOXGLOVE_PORT" =~ ^[0-9]+$ ]] \
   || fail "--port must be an integer"
 (( FOXGLOVE_PORT >= 1 && FOXGLOVE_PORT <= 65535 )) \
@@ -170,6 +177,7 @@ wait_for_node() {
 echo "[2/7] Starting DAIB-Explorer"
 docker exec -d "$algorithm_id" bash -lc \
   "$ROS_ENV; exec roslaunch --screen daib_explorer explorer.launch \
+   goal_stall_timeout_s:='$EXPLORER_GOAL_STALL_TIMEOUT_S' \
    >/tmp/daib-explorer.log 2>&1"
 wait_for_node /daib_explorer || {
   container_ros 'tail -n 120 /tmp/daib-explorer.log 2>/dev/null || true' >&2

@@ -14,6 +14,7 @@ EXPLORER_OBSERVE=false
 ISOLATED_COMMAND_TOPIC="/daib_observe/position_cmd_unconnected"
 EGO_MAX_VEL="${EGO_OBSERVE_MAX_VEL:-0.5}"
 EGO_MAX_ACC="${EGO_OBSERVE_MAX_ACC:-1.0}"
+EXPLORER_GOAL_STALL_TIMEOUT_S="${EXPLORER_GOAL_STALL_TIMEOUT_S:-6.0}"
 
 usage() {
   cat <<EOF
@@ -32,6 +33,8 @@ Options:
 
 With --explorer-observe, EGO PositionCommand is isolated at
 ${ISOLATED_COMMAND_TOPIC}; no PX4/MAVROS/SDK control process is started.
+Explorer replaces a goal after ${EXPLORER_GOAL_STALL_TIMEOUT_S}s without progress;
+override with EXPLORER_GOAL_STALL_TIMEOUT_S for a slower or faster platform.
 EOF
 }
 
@@ -78,6 +81,10 @@ awk -v value="$RATE" 'BEGIN { exit !(value > 0 && value <= 4) }' \
   || fail "--rate must be greater than 0 and at most 4"
 awk -v value="$DELAY" 'BEGIN { exit !(value >= 0 && value <= 60) }' \
   || fail "--delay must be between 0 and 60 seconds"
+[[ "$EXPLORER_GOAL_STALL_TIMEOUT_S" =~ ^[0-9]+([.][0-9]+)?$ ]] \
+  || fail "EXPLORER_GOAL_STALL_TIMEOUT_S must be numeric"
+awk -v value="$EXPLORER_GOAL_STALL_TIMEOUT_S" 'BEGIN { exit !(value >= 1 && value <= 60) }' \
+  || fail "EXPLORER_GOAL_STALL_TIMEOUT_S must be between 1 and 60 seconds"
 
 command -v docker >/dev/null || fail "docker is not installed"
 [[ -r "$COMPOSE_FILE" ]] || fail "compose file is not readable: ${COMPOSE_FILE}"
@@ -197,6 +204,7 @@ if [[ "$EXPLORER_OBSERVE" == "true" ]]; then
   docker exec -d "$algorithm_id" bash -lc \
     "$ROS_ENV; exec roslaunch --screen daib_explorer explorer.launch \
        use_sim_time:=true \
+       goal_stall_timeout_s:='$EXPLORER_GOAL_STALL_TIMEOUT_S' \
        >/tmp/daib-explorer.log 2>&1"
   wait_for_node /daib_explorer || {
     container_ros 'tail -n 160 /tmp/daib-explorer.log 2>/dev/null || true' >&2

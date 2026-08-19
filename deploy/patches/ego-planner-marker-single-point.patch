@@ -1,0 +1,22 @@
+--- /opt/daib_ws/src/ego_planner_packages/traj_utils/src/planning_visualization.cpp
++++ /opt/daib_ws/src/ego_planner_packages/traj_utils/src/planning_visualization.cpp
+@@ -43,4 +43,10 @@
+   {
+     visualization_msgs::Marker sphere, line_strip;
+     deleteMarkerList(pub, id);
++    // Foxglove/RViz reject LINE_STRIP markers with fewer than two points.
++    // A one-point optimizer result is transient and has no drawable segment.
++    if (list.size() < 2)
++    {
++      return;
++    }
+     sphere.header.frame_id = line_strip.header.frame_id = frame_id_;
+@@ -105,6 +111,6 @@
+       sphere.points.push_back(pt);
+       line_strip.points.push_back(pt);
+     }
+-    array.markers.push_back(sphere);
+-    array.markers.push_back(line_strip);
++    if (!list.empty()) array.markers.push_back(sphere);
++    if (list.size() >= 2) array.markers.push_back(line_strip);
+   }

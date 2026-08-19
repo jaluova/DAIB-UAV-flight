@@ -98,13 +98,16 @@ COPY src/DAIB-LIVO /opt/daib_ws/src/fast_livo
 COPY src/DAIB-Planner/src/planner /opt/daib_ws/src/ego_planner_packages
 COPY src/DAIB-Planner/src/uav_simulator/Utils/quadrotor_msgs /opt/daib_ws/src/quadrotor_msgs
 COPY src/DAIB-Explorer /opt/daib_ws/src/daib_explorer
+COPY deploy/patches/ego-planner-marker-single-point.patch /tmp/ego-planner-marker-single-point.patch
 
 # The BuildKit cache survives COPY invalidation and may contain object files
 # newer than freshly copied sources. Clear it before catkin checks timestamps so
 # the image cannot combine current sources with stale application binaries.
 # These packages are not part of the real-device single-UAV runtime.
 RUN --mount=type=cache,target=/opt/daib_ws/build,sharing=locked \
-    find /opt/daib_ws/build -mindepth 1 -delete \
+    patch --batch -p0 < /tmp/ego-planner-marker-single-point.patch \
+    && rm -f /tmp/ego-planner-marker-single-point.patch \
+    && find /opt/daib_ws/build -mindepth 1 -delete \
     && rm -rf /opt/daib_ws/devel \
     && touch \
       /opt/daib_ws/src/ego_planner_packages/drone_detect/CATKIN_IGNORE \
