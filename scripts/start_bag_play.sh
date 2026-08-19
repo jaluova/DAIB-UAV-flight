@@ -186,7 +186,7 @@ if [[ "$EXPLORER_OBSERVE" == "true" ]]; then
 
   wait_for_node() {
     local node_name="$1"
-    for _ in $(seq 1 60); do
+    for _ in $(seq 1 40); do
       container_ros "rosnode list 2>/dev/null | grep -Fxq '$node_name'" && return 0
       sleep 0.5
     done
@@ -204,9 +204,9 @@ if [[ "$EXPLORER_OBSERVE" == "true" ]]; then
   }
 
   explorer_ready=false
-  for _ in $(seq 1 120); do
+  for _ in $(seq 1 40); do
     if container_ros \
-        "timeout 2 rostopic echo -n 1 /daib_explorer/ready 2>/dev/null | grep -Fq 'data: true'"; then
+        "timeout --foreground --kill-after=0.2 1.5 rostopic echo -n 1 /daib_explorer/ready 2>/dev/null | grep -Eiq 'data:[[:space:]]*true'"; then
       explorer_ready=true
       break
     fi

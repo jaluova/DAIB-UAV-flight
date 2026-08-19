@@ -48,6 +48,32 @@ cd /mnt/huawei_ssd/daib
   /bags/fast_livo_real/20260818_191512
 ```
 
+启动脚本应继续输出 `[7/7] Playback + Explorer/EGO observation ready`。如果旧版本
+长时间停在 `[5/7] Starting DAIB-Explorer in bag/sim-time mode`，通常不是 Explorer
+卡死，而是旧脚本把 ROS 的布尔输出 `data: True` 错误地按小写 `data: true` 检查。
+先按 `Ctrl+C` 结束旧脚本，再清理并重新启动：
+
+```bash
+./scripts/stop_daib_stack.sh
+./scripts/start_bag_play.sh --rate 1.0 --explorer-observe \
+  /bags/fast_livo_real/20260818_191512
+```
+
+检查容器内节点时使用：
+
+```bash
+docker exec deploy-algorithm-1 bash -lc '
+source /opt/ros/noetic/setup.bash
+source /opt/daib_ws/devel/setup.bash
+rosnode list
+rostopic echo -n 1 /daib_explorer/ready
+'
+```
+
+应看到 `/daib_explorer`、`/daib_ego_bridge`、`/drone_0_ego_planner_node` 和
+`/drone_0_traj_server`，并看到 `data: True`。重复用 `rostopic echo` 轮询会产生临时
+`/rostopic_*` 节点，诊断结束后重新启动整套回放即可清理。
+
 Foxglove 连接 `ws://<香橙派Wi-Fi地址>:8765`，Fixed Frame 选择 `camera_init`。
 该模式不启动雷达、相机驱动或飞控，EGO 输出隔离到
 `/daib_observe/position_cmd_unconnected`。
