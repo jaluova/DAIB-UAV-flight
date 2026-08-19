@@ -40,6 +40,18 @@ D435i 的 USB/UVC 会话。不要手工重启驱动容器。
 `/daib_observe/position_cmd_unconnected`，脚本只有确认该话题没有订阅者才会显示
 `[PASS]`。
 
+只给香橙派供电、用已有 bag 验证 LIVO + Explorer + EGO：
+
+```bash
+cd /mnt/huawei_ssd/daib
+./scripts/start_bag_play.sh --rate 1.0 --explorer-observe \
+  /bags/fast_livo_real/20260818_191512
+```
+
+Foxglove 连接 `ws://<香橙派Wi-Fi地址>:8765`，Fixed Frame 选择 `camera_init`。
+该模式不启动雷达、相机驱动或飞控，EGO 输出隔离到
+`/daib_observe/position_cmd_unconnected`。
+
 ## 飞行录包
 
 正常 LIVO 启动通过后，在第二个 SSH 终端执行：
