@@ -150,6 +150,7 @@ namespace ego_planner
     vector<int> waypt_idx_;             // waypts constraints index
                                         //
     int max_num_id_, max_time_id_;      // stopping criteria
+    int max_rebound_retries_ = 20;
     int cost_function_;                 // used to determine objective function
     double start_time_;                 // global time for moving obstacles
 

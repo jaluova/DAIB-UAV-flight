@@ -18,6 +18,8 @@ namespace ego_planner
     nh.param("optimization/max_acc", max_acc_, -1.0);
 
     nh.param("optimization/order", order_, 3);
+    nh.param("optimization/max_rebound_retries", max_rebound_retries_, 20);
+    max_rebound_retries_ = std::max(0, max_rebound_retries_);
   }
 
   void BsplineOptimizer::setEnvironment(const GridMap::Ptr &map)
@@ -1607,7 +1609,8 @@ namespace ego_planner
 
     } while (
         ((flag_occ || ((min_ellip_dist_ != INIT_min_ellip_dist_) && (min_ellip_dist_ > swarm_clearance_))) && restart_nums < MAX_RESART_NUMS_SET) ||
-        (flag_force_return && force_stop_type_ == STOP_FOR_REBOUND && rebound_times <= 20));
+        (flag_force_return && force_stop_type_ == STOP_FOR_REBOUND &&
+         rebound_times <= max_rebound_retries_));
 
     return success;
   }

@@ -13,13 +13,14 @@
   <!-- Resource-constrained defaults for the RK3588 single-UAV stage. -->
   <arg name="map_size_x" default="80.0"/>
   <arg name="map_size_y" default="80.0"/>
-  <arg name="map_size_z" default="8.0"/>
+  <arg name="map_size_z" default="20.0"/>
   <arg name="map_resolution" default="0.25"/>
   <arg name="ground_height" default="-3.0"/>
-  <arg name="virtual_ceil_height" default="4.75"/>
+  <arg name="virtual_ceil_height" default="16.0"/>
   <arg name="max_vel" default="2.0"/>
   <arg name="max_acc" default="3.0"/>
   <arg name="planning_horizon" default="7.5"/>
+  <arg name="cloud_timeout" default="3.0"/>
   <arg name="use_distinctive_trajs" default="false"/>
 
   <param name="/use_sim_time" value="$(arg use_sim_time)"/>
@@ -60,7 +61,7 @@
     <param name="fsm/waypoint_num" value="0" type="int"/>
     <param name="fsm/manual_goal_use_message_z" value="true" type="bool"/>
     <param name="fsm/manual_goal_min_z" value="-2.5" type="double"/>
-    <param name="fsm/manual_goal_max_z" value="4.5" type="double"/>
+    <param name="fsm/manual_goal_max_z" value="15.0" type="double"/>
     <param name="fsm/manual_goal_max_age_s" value="15.0" type="double"/>
     <param name="fsm/manual_goal_max_future_skew_s"
            value="0.5" type="double"/>
@@ -112,7 +113,8 @@
     <param name="grid_map/frame_id"
            value="$(arg world_frame)" type="string"/>
     <param name="grid_map/pose_type" value="2" type="int"/>
-    <param name="grid_map/cloud_timeout" value="1.0" type="double"/>
+    <param name="grid_map/cloud_timeout"
+           value="$(arg cloud_timeout)" type="double"/>
     <param name="grid_map/fail_on_cloud_timeout" value="true" type="bool"/>
     <param name="grid_map/odom_depth_timeout" value="1.0" type="double"/>
     <param name="grid_map/show_occ_time" value="false" type="bool"/>
@@ -141,6 +143,10 @@
     <param name="manager/max_acc" value="$(arg max_acc)" type="double"/>
     <param name="manager/max_jerk" value="4.0" type="double"/>
     <param name="manager/control_points_distance" value="0.5" type="double"/>
+    <!-- Keep one failed local replan below the independent-cloud timeout on
+         RK3588. The upstream default of 20 can monopolize the single ROS
+         callback thread for several seconds when every A* attempt times out. -->
+    <param name="optimization/max_rebound_retries" value="1" type="int"/>
     <param name="manager/feasibility_tolerance" value="0.05" type="double"/>
     <param name="manager/planning_horizon"
            value="$(arg planning_horizon)" type="double"/>
