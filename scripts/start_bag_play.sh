@@ -15,6 +15,7 @@ ISOLATED_COMMAND_TOPIC="/daib_observe/position_cmd_unconnected"
 EGO_MAX_VEL="${EGO_OBSERVE_MAX_VEL:-0.5}"
 EGO_MAX_ACC="${EGO_OBSERVE_MAX_ACC:-1.0}"
 EXPLORER_GOAL_STALL_TIMEOUT_S="${EXPLORER_GOAL_STALL_TIMEOUT_S:-15.0}"
+EGO_CLOUD_TIMEOUT_S="${EGO_CLOUD_TIMEOUT_S:-3.0}"
 
 usage() {
   cat <<EOF
@@ -85,6 +86,10 @@ awk -v value="$DELAY" 'BEGIN { exit !(value >= 0 && value <= 60) }' \
   || fail "EXPLORER_GOAL_STALL_TIMEOUT_S must be numeric"
 awk -v value="$EXPLORER_GOAL_STALL_TIMEOUT_S" 'BEGIN { exit !(value >= 1 && value <= 60) }' \
   || fail "EXPLORER_GOAL_STALL_TIMEOUT_S must be between 1 and 60 seconds"
+[[ "$EGO_CLOUD_TIMEOUT_S" =~ ^[0-9]+([.][0-9]+)?$ ]] \
+  || fail "EGO_CLOUD_TIMEOUT_S must be numeric"
+awk -v value="$EGO_CLOUD_TIMEOUT_S" 'BEGIN { exit !(value >= 0.5 && value <= 10) }' \
+  || fail "EGO_CLOUD_TIMEOUT_S must be between 0.5 and 10 seconds"
 
 command -v docker >/dev/null || fail "docker is not installed"
 [[ -r "$COMPOSE_FILE" ]] || fail "compose file is not readable: ${COMPOSE_FILE}"
@@ -169,10 +174,18 @@ LIO_ENABLE_FOXGLOVE=true \
 algorithm_id="$("${COMPOSE[@]}" ps -q algorithm)"
 [[ -n "$algorithm_id" ]] || fail "algorithm container was not created"
 
+if [[ "$EXPLORER_OBSERVE" == "true" ]]; then
+  docker cp "${REPO_ROOT}/src/DAIB-Planner/src/planner/plan_manage/launch/daib_single_uav.launch" \
+    "$algorithm_id:/opt/daib_ws/src/ego_planner_packages/plan_manage/launch/daib_single_uav.launch"
+  chmod +x "${SCRIPT_DIR}/daib_planning_watchdog.sh"
+  [[ -r "${SCRIPT_DIR}/refresh_daib_goal.py" ]] || fail "goal refresh helper is missing"
+  pkill -TERM -f '[d]aib_planning_watchdog.sh' 2>/dev/null || true
+fi
+
 echo "[4/5] Waiting for rosbag and Foxglove"
 ready=false
 for _ in $(seq 1 60); do
-  if docker top "$algorithm_id" -eo pid,args 2>/dev/null | grep -Fq "rosbag play" &&
+  if docker top "$algorithm_id" -eo pid,args 2>/dev/null | grep -F "rosbag play" >/dev/null &&
       ss -lnt | grep -q ':8765 '; then
     ready=true
     break
@@ -213,8 +226,8 @@ if [[ "$EXPLORER_OBSERVE" == "true" ]]; then
 
   explorer_ready=false
   for _ in $(seq 1 40); do
-    if container_ros \
-        "python3 -c 'import rospy; from std_msgs.msg import Bool; rospy.init_node(\"daib_ready_check\", anonymous=True, disable_rosout=True); msg=rospy.wait_for_message(\"/daib_explorer/ready\", Bool, timeout=1.5); raise SystemExit(0 if msg.data else 1)' 2>/dev/null"; then
+    if docker exec "$algorithm_id" bash -lc \
+        "grep -Fq '[ DAIB Explorer ] map=' /tmp/daib-explorer.log 2>/dev/null"; then
       explorer_ready=true
       break
     fi
@@ -231,6 +244,7 @@ if [[ "$EXPLORER_OBSERVE" == "true" ]]; then
        use_sim_time:=true \
        max_vel:='$EGO_MAX_VEL' \
        max_acc:='$EGO_MAX_ACC' \
+       cloud_timeout:='$EGO_CLOUD_TIMEOUT_S' \
        position_cmd_topic:='$ISOLATED_COMMAND_TOPIC' \
        >/tmp/daib-ego-observe.log 2>&1"
 
@@ -254,6 +268,12 @@ if [[ "$EXPLORER_OBSERVE" == "true" ]]; then
     printf '%s\n' "$command_info" >&2
     fail "isolated EGO command topic unexpectedly has a subscriber"
   }
+
+  echo "[7/7] Starting planning recovery watchdog"
+  nohup "${SCRIPT_DIR}/daib_planning_watchdog.sh" \
+    "$algorithm_id" bag true "$EXPLORER_GOAL_STALL_TIMEOUT_S" "$EGO_MAX_VEL" "$EGO_MAX_ACC" "$ISOLATED_COMMAND_TOPIC" \
+    "$EGO_CLOUD_TIMEOUT_S" \
+    >/tmp/daib-planning-watchdog.log 2>&1 &
 fi
 
 wifi_ip="$(ip -4 -o addr show dev wlan0 2>/dev/null | awk '{split($4, addr, "/"); print addr[1]; exit}')"

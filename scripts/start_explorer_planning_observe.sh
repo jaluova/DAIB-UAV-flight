@@ -13,6 +13,7 @@ SEND_BUFFER_LIMIT="${FOXGLOVE_SEND_BUFFER_LIMIT:-16000000}"
 MAX_VEL="${EGO_OBSERVE_MAX_VEL:-0.5}"
 MAX_ACC="${EGO_OBSERVE_MAX_ACC:-1.0}"
 EXPLORER_GOAL_STALL_TIMEOUT_S="${EXPLORER_GOAL_STALL_TIMEOUT_S:-15.0}"
+EGO_CLOUD_TIMEOUT_S="${EGO_CLOUD_TIMEOUT_S:-3.0}"
 RESTART_DRIVERS=false
 CAMERA_SOURCE_TOPIC="/camera/color/image_fast_livo"
 CAMERA_OUTPUT_TOPIC="/camera/color/image_fast_livo_foxglove"
@@ -106,6 +107,10 @@ awk -v value="$MAX_ACC" 'BEGIN { exit !(value > 0 && value <= 3) }' \
   || fail "EXPLORER_GOAL_STALL_TIMEOUT_S must be numeric"
 awk -v value="$EXPLORER_GOAL_STALL_TIMEOUT_S" 'BEGIN { exit !(value >= 1 && value <= 60) }' \
   || fail "EXPLORER_GOAL_STALL_TIMEOUT_S must be between 1 and 60 seconds"
+[[ "$EGO_CLOUD_TIMEOUT_S" =~ ^[0-9]+([.][0-9]+)?$ ]] \
+  || fail "EGO_CLOUD_TIMEOUT_S must be numeric"
+awk -v value="$EGO_CLOUD_TIMEOUT_S" 'BEGIN { exit !(value >= 0.5 && value <= 10) }' \
+  || fail "EGO_CLOUD_TIMEOUT_S must be between 0.5 and 10 seconds"
 [[ "$FOXGLOVE_PORT" =~ ^[0-9]+$ ]] \
   || fail "--port must be an integer"
 (( FOXGLOVE_PORT >= 1 && FOXGLOVE_PORT <= 65535 )) \
@@ -139,6 +144,34 @@ else
   fail "Docker Compose is not installed"
 fi
 
+# Keep the Explorer workflow from restarting a live, healthy sensor container.
+# The host Ethernet address can disappear after a bag/live-mode transition;
+# restore it in place so start_livo.sh recognizes the existing driver graph.
+repair_running_driver_network() {
+  local drivers_id driver_state driver_env interface host_cidr device_ip
+  drivers_id="$("${COMPOSE[@]}" ps -q drivers)"
+  [[ -n "$drivers_id" ]] || return 0
+  driver_state="$(docker inspect -f '{{.State.Status}}' "$drivers_id" 2>/dev/null || true)"
+  [[ "$driver_state" == "running" ]] || return 0
+  driver_env="$(docker inspect -f '{{range .Config.Env}}{{println .}}{{end}}' "$drivers_id" 2>/dev/null || true)"
+  interface="$(sed -n 's/^LIDAR_INTERFACE=//p' <<< "$driver_env" | tail -n 1)"
+  host_cidr="$(sed -n 's/^LIDAR_HOST_CIDR=//p' <<< "$driver_env" | tail -n 1)"
+  device_ip="$(sed -n 's/^LIDAR_DEVICE_IP=//p' <<< "$driver_env" | tail -n 1)"
+  [[ -n "$interface" && -n "$host_cidr" && -n "$device_ip" ]] || return 0
+  docker exec "$drivers_id" bash -lc '
+    set -Eeuo pipefail
+    interface="$1"; host_cidr="$2"; device_ip="$3"
+    ip link set "$interface" up
+    ip addr replace "$host_cidr" dev "$interface"
+    printf "0\n" > /proc/sys/net/ipv4/conf/all/rp_filter
+    printf "0\n" > "/proc/sys/net/ipv4/conf/${interface}/rp_filter"
+    route="$(ip -4 route get "$device_ip")"
+    host_ip="${host_cidr%/*}"
+    [[ " $route " == *" dev ${interface} "* ]]
+    [[ " $route " == *" src ${host_ip} "* ]]
+  ' -- "$interface" "$host_cidr" "$device_ip"
+}
+
 LOCK_DIR=/tmp/daib-start-explorer-planning-observe.lock
 mkdir "$LOCK_DIR" 2>/dev/null \
   || fail "another Explorer/EGO observation startup is already running"
@@ -147,7 +180,9 @@ trap 'rmdir "$LOCK_DIR" 2>/dev/null || true' EXIT
 lio_args=(--check-seconds "$CHECK_SECONDS")
 [[ "$RESTART_DRIVERS" == "true" ]] && lio_args+=(--restart-drivers)
 
-echo "[1/7] Starting and validating sensors and normal LIVO"
+echo "[1/8] Starting and validating sensors and normal LIVO"
+repair_running_driver_network \
+  || fail "running driver network could not be repaired without restarting drivers"
 DAIB_COMPOSE_FILE="$COMPOSE_FILE" \
 DAIB_LIO_COMPOSE_FILE="$LIO_OVERRIDE_FILE" \
 DAIB_ENV_FILE="$ENV_FILE" \
@@ -158,6 +193,13 @@ algorithm_id="$("${COMPOSE[@]}" ps -q algorithm)"
 [[ -n "$algorithm_id" ]] || fail "algorithm container was not created"
 [[ "$(docker inspect -f '{{.State.Status}}' "$algorithm_id")" == "running" ]] \
   || fail "algorithm container is not running"
+
+docker cp "${REPO_ROOT}/src/DAIB-Planner/src/planner/plan_manage/launch/daib_single_uav.launch" \
+  "$algorithm_id:/opt/daib_ws/src/ego_planner_packages/plan_manage/launch/daib_single_uav.launch"
+
+chmod +x "${SCRIPT_DIR}/daib_planning_watchdog.sh"
+[[ -r "${SCRIPT_DIR}/refresh_daib_goal.py" ]] || fail "goal refresh helper is missing"
+pkill -TERM -f '[d]aib_planning_watchdog.sh' 2>/dev/null || true
 
 ROS_ENV='source /opt/ros/noetic/setup.bash; source /opt/daib_ws/devel/setup.bash; export ROS_MASTER_URI=http://127.0.0.1:11311; export ROS_HOSTNAME=127.0.0.1; unset ROS_IP'
 
@@ -174,7 +216,11 @@ wait_for_node() {
   return 1
 }
 
-echo "[2/7] Starting DAIB-Explorer"
+# The ROS master is persistent across bag and real-time runs. Always leave
+# simulation time disabled before starting the live observation graph.
+container_ros "rosparam set /use_sim_time false"
+
+echo "[2/8] Starting DAIB-Explorer"
 docker exec -d "$algorithm_id" bash -lc \
   "$ROS_ENV; exec roslaunch --screen daib_explorer explorer.launch \
    goal_stall_timeout_s:='$EXPLORER_GOAL_STALL_TIMEOUT_S' \
@@ -184,26 +230,29 @@ wait_for_node /daib_explorer || {
   fail "DAIB-Explorer node did not start"
 }
 
-echo "[3/7] Waiting for synchronized Explorer inputs"
+echo "[3/8] Waiting for synchronized Explorer inputs"
 explorer_ready=false
 for _ in $(seq 1 40); do
-  if container_ros \
-      "python3 -c 'import rospy; from std_msgs.msg import Bool; rospy.init_node(\"daib_ready_check\", anonymous=True, disable_rosout=True); msg=rospy.wait_for_message(\"/daib_explorer/ready\", Bool, timeout=1.5); raise SystemExit(0 if msg.data else 1)' 2>/dev/null"; then
+  # rospy/rostopic is unreliable with the board's Python 3.11 ROS build.
+  # A completed map cycle proves that Explorer consumed fresh odom and cloud.
+  if docker exec "$algorithm_id" bash -lc \
+      "grep -Fq '[ DAIB Explorer ] map=' /tmp/daib-explorer.log 2>/dev/null"; then
     explorer_ready=true
     break
   fi
-  sleep 0.5
+  sleep 0.25
 done
 [[ "$explorer_ready" == "true" ]] || {
   container_ros 'tail -n 160 /tmp/daib-explorer.log 2>/dev/null || true' >&2
   fail "Explorer did not report ready=true"
 }
 
-echo "[4/7] Starting EGO-Planner with an isolated command output"
+echo "[4/8] Starting EGO-Planner with an isolated command output"
 docker exec -d "$algorithm_id" bash -lc \
   "$ROS_ENV; exec roslaunch --screen ego_planner daib_single_uav.launch \
      max_vel:='$MAX_VEL' \
      max_acc:='$MAX_ACC' \
+     cloud_timeout:='$EGO_CLOUD_TIMEOUT_S' \
      position_cmd_topic:='$ISOLATED_COMMAND_TOPIC' \
    >/tmp/daib-ego-observe.log 2>&1"
 
@@ -227,7 +276,7 @@ grep -Fq 'Subscribers: None' <<< "$command_info" || {
   fail "isolated EGO command topic unexpectedly has a subscriber"
 }
 
-echo "[5/7] Starting the planning-observation Foxglove Bridge"
+echo "[5/8] Starting the planning-observation Foxglove Bridge"
 if awk -v rate="$CAMERA_RATE" 'BEGIN { exit !(rate > 0) }'; then
   docker exec -d "$algorithm_id" bash -lc \
     "source /opt/ros/noetic/setup.bash; \
@@ -248,7 +297,7 @@ docker exec -d "$algorithm_id" bash -lc \
      send_buffer_limit:='$SEND_BUFFER_LIMIT' \
      >/tmp/foxglove-bridge.log 2>&1"
 
-echo "[6/7] Verifying Foxglove and planning topic contracts"
+echo "[6/8] Verifying Foxglove and planning topic contracts"
 foxglove_ready=false
 for _ in $(seq 1 40); do
   if container_ros \
@@ -267,12 +316,18 @@ done
   fail "planning observation topics or Foxglove did not become ready"
 }
 
-echo "[7/7] Confirming that no flight-control subscriber is connected"
+echo "[7/8] Confirming that no flight-control subscriber is connected"
 command_info="$(container_ros "rostopic info '$ISOLATED_COMMAND_TOPIC'")"
 grep -Fq 'Subscribers: None' <<< "$command_info" || {
   printf '%s\n' "$command_info" >&2
   fail "do not fly: the isolated planning command acquired a subscriber"
 }
+
+echo "[8/8] Starting planning recovery watchdog"
+nohup "${SCRIPT_DIR}/daib_planning_watchdog.sh" \
+  "$algorithm_id" live false "$EXPLORER_GOAL_STALL_TIMEOUT_S" "$MAX_VEL" "$MAX_ACC" "$ISOLATED_COMMAND_TOPIC" \
+  "$EGO_CLOUD_TIMEOUT_S" \
+  >/tmp/daib-planning-watchdog.log 2>&1 &
 
 wifi_ip="$(ip -4 -o addr show dev wlan0 2>/dev/null | awk '{split($4, addr, "/"); print addr[1]; exit}')"
 [[ -n "$wifi_ip" ]] || wifi_ip="<orange-pi-ip>"

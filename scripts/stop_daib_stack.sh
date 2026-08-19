@@ -16,6 +16,7 @@ else
 fi
 
 echo "[1/2] Stopping Compose algorithm, driver and ROS Master services"
+pkill -TERM -f '[d]aib_planning_watchdog.sh' 2>/dev/null || true
 "${COMPOSE[@]}" stop algorithm drivers roscore >/dev/null 2>&1 || true
 
 echo "[2/2] Stopping legacy standalone LIVO/Foxglove containers"

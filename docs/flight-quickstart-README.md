@@ -40,6 +40,28 @@ D435i 的 USB/UVC 会话。不要手工重启驱动容器。
 `/daib_observe/position_cmd_unconnected`，脚本只有确认该话题没有订阅者才会显示
 `[PASS]`。
 
+脚本会启动一个观察模式 watchdog：Explorer 单独异常时只重启 Explorer，EGO 单独异常时
+只重启 EGO；两者都异常时先恢复 Explorer，再重启 EGO。仍不能恢复才重启两者。不会重启
+ROS Master、驱动或 FAST-LIVO。恢复时会重新发布当前
+latched goal；两级恢复都失败时，终端和 `/tmp/daib-planning-watchdog.log` 会显示：
+`FAIL planning recovery failed; keep manual control and return`，此时保持遥控并人工返航。
+EGO 规划点云超时默认为 3 秒：短于 3 秒的板端调度抖动不会清空路径，持续断流仍会
+触发 watchdog。需要临时调整时可在启动命令前设置 `EGO_CLOUD_TIMEOUT_S`。
+EGO 在一个 ROS 回调内最多执行 1 次额外 rebound 重试，失败后让出线程并在 0.2 秒后
+使用新点云重试，避免连续 A* 搜索阻塞点云回调并误触发 `Depth Lost`。watchdog 不把
+普通 `plan_success=0` 或 A* 无路可走当成模块故障，只有节点消失或明确点云超时才重启
+EGO；不可达目标由 Explorer 的 15 秒停滞策略负责更换。
+
+当前 Explorer 与 EGO 的目标高度包线统一为 `camera_init` 起飞原点下 `-2.5 m` 到
+`15.0 m`，EGO 垂直地图范围为 `-3.0 m` 到 `17.0 m`，虚拟顶棚为 `16.0 m`。
+顶棚比最高目标高 1 米，为机体膨胀和规划代价保留余量。障碍点使用 `0.5 m`
+各向同性膨胀，覆盖 M400 展开后约 `0.49 m` 的最大半尺寸并保留少量余量。该设置只影响
+目标筛选和观察到的规划路线，不会把路线发送给飞控。
+
+`20260818_191512` bag 后半段会走到 `y≈60 m`，超出 EGO 当前以起飞点为中心的
+`80 m × 80 m` 水平地图，因此后半段仍可能出现 `in_map=false`。这与 15 米高度设置无关；
+后续水平探索边界应和 EGO 水平地图范围一起确定，不能只放宽 Explorer。
+
 只给香橙派供电、用已有 bag 验证 LIVO + Explorer + EGO：
 
 ```bash
@@ -47,6 +69,15 @@ cd /mnt/huawei_ssd/daib
 ./scripts/start_bag_play.sh --rate 1.0 --explorer-observe \
   /bags/fast_livo_real/20260818_191512
 ```
+
+bag 观察模式也启用同一个 watchdog。手工查看恢复状态：
+
+```bash
+tail -f /tmp/daib-planning-watchdog.log
+```
+
+看到 `monitor active` 表示监控已启动；看到 `EGO recovered` 或 `full planning restart recovered`
+表示恢复成功；看到 `FAIL planning recovery failed` 不要继续依赖规划结果，直接人工返航。
 
 启动脚本应继续输出 `[7/7] Playback + Explorer/EGO observation ready`。如果旧版本
 长时间停在 `[5/7] Starting DAIB-Explorer in bag/sim-time mode`，通常不是 Explorer
@@ -59,8 +90,8 @@ cd /mnt/huawei_ssd/daib
   /bags/fast_livo_real/20260818_191512
 ```
 
-当前版本用 `rospy.wait_for_message()` 等待 latched 的 `std_msgs/Bool` ready 消息，
-不会反复创建 `/rostopic_*` 临时节点。检查容器内节点时使用：
+当前版本通过 Explorer 日志中的完整 `map=` 周期确认输入已同步，不调用板端不稳定的
+`rospy.wait_for_message()` 或 `rostopic hz`。检查容器内节点时使用：
 
 ```bash
 docker exec deploy-algorithm-1 bash -lc '
