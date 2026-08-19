@@ -10,10 +10,14 @@ RATE=1.0
 DELAY=8.0
 BAG_PATH=""
 BAG_FILES=()
+EXPLORER_OBSERVE=false
+ISOLATED_COMMAND_TOPIC="/daib_observe/position_cmd_unconnected"
+EGO_MAX_VEL="${EGO_OBSERVE_MAX_VEL:-0.5}"
+EGO_MAX_ACC="${EGO_OBSERVE_MAX_ACC:-1.0}"
 
 usage() {
   cat <<EOF
-Usage: $(basename "$0") [--rate RATE] [--delay SECONDS] [BAG]
+Usage: $(basename "$0") [--rate RATE] [--delay SECONDS] [--explorer-observe] [BAG]
 
 Replay one FAST-LIVO input bag session through the algorithm and the all-topic
 Foxglove Bridge. BAG may be a host file or directory below BAGS_DIR, or a
@@ -23,7 +27,11 @@ when BAG is omitted.
 Options:
   --rate RATE       Playback rate (default: ${RATE})
   --delay SECONDS   Delay before playback starts (default: ${DELAY})
+  --explorer-observe  Also start DAIB-Explorer and EGO-Planner in observation-only mode
   -h, --help        Show this help
+
+With --explorer-observe, EGO PositionCommand is isolated at
+${ISOLATED_COMMAND_TOPIC}; no PX4/MAVROS/SDK control process is started.
 EOF
 }
 
@@ -43,6 +51,10 @@ while (($#)); do
       (($# >= 2)) || fail "--delay requires a value"
       DELAY="$2"
       shift 2
+      ;;
+    --explorer-observe)
+      EXPLORER_OBSERVE=true
+      shift
       ;;
     -h|--help)
       usage
@@ -165,10 +177,85 @@ done
   fail "bag playback or Foxglove did not become ready"
 }
 
+if [[ "$EXPLORER_OBSERVE" == "true" ]]; then
+  ROS_ENV='source /opt/ros/noetic/setup.bash; source /opt/daib_ws/devel/setup.bash; export ROS_MASTER_URI=http://127.0.0.1:11311; export ROS_HOSTNAME=127.0.0.1; unset ROS_IP'
+
+  container_ros() {
+    docker exec "$algorithm_id" bash -lc "$ROS_ENV; $1"
+  }
+
+  wait_for_node() {
+    local node_name="$1"
+    for _ in $(seq 1 60); do
+      container_ros "rosnode list 2>/dev/null | grep -Fxq '$node_name'" && return 0
+      sleep 0.5
+    done
+    return 1
+  }
+
+  echo "[5/7] Starting DAIB-Explorer in bag/sim-time mode"
+  docker exec -d "$algorithm_id" bash -lc \
+    "$ROS_ENV; exec roslaunch --screen daib_explorer explorer.launch \
+       use_sim_time:=true \
+       >/tmp/daib-explorer.log 2>&1"
+  wait_for_node /daib_explorer || {
+    container_ros 'tail -n 160 /tmp/daib-explorer.log 2>/dev/null || true' >&2
+    fail "DAIB-Explorer node did not start during bag playback"
+  }
+
+  explorer_ready=false
+  for _ in $(seq 1 120); do
+    if container_ros \
+        "timeout 2 rostopic echo -n 1 /daib_explorer/ready 2>/dev/null | grep -Fq 'data: true'"; then
+      explorer_ready=true
+      break
+    fi
+    sleep 0.5
+  done
+  [[ "$explorer_ready" == "true" ]] || {
+    container_ros 'tail -n 200 /tmp/daib-explorer.log 2>/dev/null || true' >&2
+    fail "Explorer did not report ready=true during bag playback"
+  }
+
+  echo "[6/7] Starting EGO-Planner in observation-only mode"
+  docker exec -d "$algorithm_id" bash -lc \
+    "$ROS_ENV; exec roslaunch --screen ego_planner daib_single_uav.launch \
+       use_sim_time:=true \
+       max_vel:='$EGO_MAX_VEL' \
+       max_acc:='$EGO_MAX_ACC' \
+       position_cmd_topic:='$ISOLATED_COMMAND_TOPIC' \
+       >/tmp/daib-ego-observe.log 2>&1"
+
+  for node_name in /daib_ego_bridge /drone_0_ego_planner_node /drone_0_traj_server; do
+    wait_for_node "$node_name" || {
+      container_ros 'tail -n 220 /tmp/daib-ego-observe.log 2>/dev/null || true' >&2
+      fail "EGO observation node did not start during bag playback: ${node_name}"
+    }
+  done
+
+  command_type=""
+  for _ in $(seq 1 20); do
+    command_type="$(container_ros "rostopic type '$ISOLATED_COMMAND_TOPIC' 2>/dev/null" || true)"
+    [[ "$command_type" == "quadrotor_msgs/PositionCommand" ]] && break
+    sleep 0.25
+  done
+  [[ "$command_type" == "quadrotor_msgs/PositionCommand" ]] \
+    || fail "isolated EGO command topic was not advertised"
+  command_info="$(container_ros "rostopic info '$ISOLATED_COMMAND_TOPIC'")"
+  grep -Fq 'Subscribers: None' <<< "$command_info" || {
+    printf '%s\n' "$command_info" >&2
+    fail "isolated EGO command topic unexpectedly has a subscriber"
+  }
+fi
+
 wifi_ip="$(ip -4 -o addr show dev wlan0 2>/dev/null | awk '{split($4, addr, "/"); print addr[1]; exit}')"
 [[ -n "$wifi_ip" ]] || wifi_ip="<orange-pi-ip>"
 
-echo "[5/5] Playback ready"
+if [[ "$EXPLORER_OBSERVE" == "true" ]]; then
+  echo "[7/7] Playback + Explorer/EGO observation ready"
+else
+  echo "[5/5] Playback ready"
+fi
 echo "  bags:"
 for bag_file in "${BAG_FILES[@]}"; do
   echo "    ${bag_file}"
@@ -177,6 +264,14 @@ echo "  rate:       ${RATE}x"
 echo "  start delay:${DELAY}s"
 echo "  Foxglove:   ws://${wifi_ip}:8765"
 echo "  fixed frame: camera_init"
+if [[ "$EXPLORER_OBSERVE" == "true" ]]; then
+  echo "  Explorer goal: /daib_explorer/goal"
+  echo "  EGO route:     /drone_0_ego_planner_node/optimal_list"
+  echo "  obstacle cloud:/daib_explorer/planning_cloud"
+  echo "  command:       ${ISOLATED_COMMAND_TOPIC} (no subscribers)"
+  echo
+  echo "[SAFETY] Bag observation only; no PX4, MAVROS, SDK or flight controller is started."
+fi
 echo
 echo "Return to live sensors with:"
 echo "  ./scripts/start_flight_stack.sh --check-seconds 15 --camera-rate 6"

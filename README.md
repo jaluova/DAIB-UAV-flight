@@ -156,6 +156,16 @@ Foxglove：
 ./scripts/start_bag_play.sh --rate 1.0
 ```
 
+只用香橙派回放 bag 并观察 Explorer + EGO，不接飞控：
+
+```bash
+./scripts/start_bag_play.sh --rate 1.0 --explorer-observe \
+  /bags/fast_livo_real/20260818_191512
+```
+
+该模式使用 bag 的 `/clock`，启动 Explorer 和 EGO-Planner，并把
+`PositionCommand` 隔离到无订阅者话题；它只验证目标点和规划路线，不会控制飞机。
+
 `--rate 1.0` 按实时速度回放；需要慢速排查时才改为 `--rate 0.5`。回放倍率不会
 改变 bag 中已经记录的数据。录制脚本保存 MID-70
 约 10 Hz、D435i IMU 约 200 Hz，以及 FAST-LIVO 实际消费的标称 10 Hz 图像；使用

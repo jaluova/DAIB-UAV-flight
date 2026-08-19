@@ -98,9 +98,24 @@ cd /mnt/huawei_ssd/daib
 ./scripts/start_bag_play.sh --rate 1.0
 ```
 
+只用香橙派回放 bag，同时验证 Explorer 选点和 EGO 路线时：
+
+```bash
+./scripts/start_bag_play.sh --rate 1.0 --explorer-observe \
+  /bags/fast_livo_real/20260818_191512
+```
+
+省略最后的目录参数会自动选择最新录包目录。该模式将 `/use_sim_time` 设为 true，
+启动 `DAIB-Explorer`、`daib_ego_bridge` 和 EGO-Planner，但把轨迹指令隔离到
+`/daib_observe/position_cmd_unconnected`，并确认该话题没有订阅者。它不启动雷达、
+相机驱动、PX4、MAVROS、SDK 或飞控控制器，只用于观察目标和规划路线。
+
 然后 Foxglove 连接 `ws://<香橙派Wi-Fi地址>:8765`，3D 面板 Fixed Frame 选择
 `camera_init`。脚本默认选择最新录包目录，并按顺序回放该目录下的全部分卷；播放结束后
 最终地图仍可查看。也可以把某个 bag 文件或录包目录作为脚本最后一个参数传入。
+观察模式重点查看 `/daib_explorer/goal`、`/daib_explorer/selected_cluster_frontiers`、
+`/daib_explorer/planning_cloud`、`/drone_0_ego_planner_node/goal_point` 和
+`/drone_0_ego_planner_node/optimal_list`。
 
 恢复实机 LIVO：
 

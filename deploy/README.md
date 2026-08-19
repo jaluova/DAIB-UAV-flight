@@ -404,10 +404,18 @@ below `BAGS_DIR/fast_livo_real`, including all split bag files in that session:
 
 ```bash
 ./scripts/start_bag_play.sh --rate 1.0
+
+# Replay a bag and observe Explorer + EGO without any flight-control subscriber.
+./scripts/start_bag_play.sh --rate 1.0 --explorer-observe \
+  /bags/fast_livo_real/20260818_191512
 ```
 
 Pass an explicit host file, host directory, or `/bags` path as the final
 argument when needed.
+Add `--explorer-observe` to start DAIB-Explorer and EGO-Planner in `use_sim_time`
+mode. The generated PositionCommand is remapped to the unconnected
+`/daib_observe/position_cmd_unconnected` topic and is checked for zero
+subscribers. This mode starts no sensor driver or PX4/MAVROS/SDK controller.
 Use `--rate 0.5` only when deliberately inspecting the data in slow motion.
 `--rate` controls playback only; recording always preserves the messages and
 timestamps received in real time. The recorded image topic is FAST-LIVO's
