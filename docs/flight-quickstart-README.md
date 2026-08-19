@@ -80,7 +80,7 @@ Foxglove 连接 `ws://<香橙派Wi-Fi地址>:8765`，Fixed Frame 选择 `camera_
 该模式不启动雷达、相机驱动或飞控，EGO 输出隔离到
 `/daib_observe/position_cmd_unconnected`。
 
-当前回放脚本默认在 Explorer 目标连续约 6 秒没有进展时切换新目标；需要按平台速度调整时，
+当前回放脚本默认在 Explorer 目标连续约 15 秒没有进展时切换新目标；需要按平台速度调整时，
 可设置 `EXPLORER_GOAL_STALL_TIMEOUT_S=10` 后再启动。EGO 的
 `/drone_0_ego_planner_node/optimal_list` 是局部轨迹，默认规划视距为 7.5 m，
 不是从当前位置到最终探索目标的完整全局路径。
