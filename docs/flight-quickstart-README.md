@@ -59,20 +59,22 @@ cd /mnt/huawei_ssd/daib
   /bags/fast_livo_real/20260818_191512
 ```
 
-检查容器内节点时使用：
+当前版本用 `rospy.wait_for_message()` 等待 latched 的 `std_msgs/Bool` ready 消息，
+不会反复创建 `/rostopic_*` 临时节点。检查容器内节点时使用：
 
 ```bash
 docker exec deploy-algorithm-1 bash -lc '
 source /opt/ros/noetic/setup.bash
 source /opt/daib_ws/devel/setup.bash
 rosnode list
-rostopic echo -n 1 /daib_explorer/ready
+rostopic info /daib_explorer/ready
 '
 ```
 
 应看到 `/daib_explorer`、`/daib_ego_bridge`、`/drone_0_ego_planner_node` 和
-`/drone_0_traj_server`，并看到 `data: True`。重复用 `rostopic echo` 轮询会产生临时
-`/rostopic_*` 节点，诊断结束后重新启动整套回放即可清理。
+`/drone_0_traj_server`，且 `/daib_explorer/ready` 显示 `Type: std_msgs/Bool` 和
+`Publishers: /daib_explorer`。如需手工查看消息，偶尔执行一次
+`rostopic echo -n 1 /daib_explorer/ready` 即可，不要用循环反复执行。
 
 Foxglove 连接 `ws://<香橙派Wi-Fi地址>:8765`，Fixed Frame 选择 `camera_init`。
 该模式不启动雷达、相机驱动或飞控，EGO 输出隔离到
