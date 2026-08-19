@@ -90,6 +90,8 @@ struct ExplorerConfig
   double min_goal_distance_m = 1.5;
   double max_goal_distance_m = 8.0;
   double max_goal_vertical_distance_m = 3.0;
+  double min_goal_z_m = -std::numeric_limits<double>::infinity();
+  double max_goal_z_m = std::numeric_limits<double>::infinity();
   double min_known_free_path_ratio = 0.5;
   double goal_switch_margin = 0.15;
 

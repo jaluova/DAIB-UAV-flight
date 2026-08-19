@@ -556,6 +556,30 @@ TEST(ExplorerCore, UsesSymmetricRelativeVerticalBound)
             config.viewpoint_same_height_tolerance_m + 1e-9);
 }
 
+TEST(ExplorerCore, RejectsViewpointsOutsideAbsoluteHeightEnvelope)
+{
+  ExplorerConfig config;
+  config.planning_voxel_size_m = 1.0;
+  config.min_goal_distance_m = 1.0;
+  config.max_goal_distance_m = 20.0;
+  config.degenerate_max_goal_distance_m = 20.0;
+  config.max_goal_vertical_distance_m = 20.0;
+  config.min_goal_z_m = -2.5;
+  config.max_goal_z_m = 4.5;
+  config.min_frontier_cluster_cells = 1;
+  ExplorerCore explorer(config);
+  ExplorerCoreTestPeer::setPositiveXFrontier(explorer, {4, 0, 8});
+
+  ExplorerCoreTestPeer::updateDecision(
+      explorer, {0.0, 0.0, 0.0}, 1.0);
+  GoalDecision decision;
+  ASSERT_TRUE(explorer.consumeDecision(decision));
+  EXPECT_FALSE(decision.valid);
+  EXPECT_EQ(explorer.stats().frontier_clusters, 1U);
+  EXPECT_EQ(explorer.stats().rejected_no_viewpoint, 0U);
+  EXPECT_GT(explorer.stats().rejected_vertical_distance, 0U);
+}
+
 TEST(ExplorerCore, RequiresConsecutiveObstacleConfirmation)
 {
   ExplorerConfig config;

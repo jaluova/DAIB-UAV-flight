@@ -134,6 +134,8 @@ void ExplorerCore::sanitizeConfig()
   config_.max_goal_vertical_distance_m =
       std::max(config_.planning_voxel_size_m,
                config_.max_goal_vertical_distance_m);
+  if (config_.min_goal_z_m > config_.max_goal_z_m)
+    std::swap(config_.min_goal_z_m, config_.max_goal_z_m);
   config_.min_known_free_path_ratio =
       clamp(config_.min_known_free_path_ratio, 0.0, 1.0);
   config_.goal_switch_margin = clamp(config_.goal_switch_margin, 0.0, 1.0);
@@ -1167,7 +1169,9 @@ void ExplorerCore::updateDecision(const Vec3 &position, double timestamp)
         continue;
       }
       const double vertical_distance = std::fabs(candidate.z - position.z);
-      if (vertical_distance > config_.max_goal_vertical_distance_m)
+      if (vertical_distance > config_.max_goal_vertical_distance_m ||
+          candidate.z < config_.min_goal_z_m ||
+          candidate.z > config_.max_goal_z_m)
       {
         ++stats_.rejected_vertical_distance;
         continue;

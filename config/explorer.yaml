@@ -106,6 +106,10 @@ max_goal_distance_m: 8.0
 # Symmetric relative-height bound around the current UAV position:
 # current_z - 3 m <= goal_z <= current_z + 3 m.
 max_goal_vertical_distance_m: 3.0
+# Absolute mission-height envelope in the camera_init frame. These values
+# match the EGO bridge; its virtual map leaves clearance outside this range.
+min_goal_z_m: -2.5
+max_goal_z_m: 15.0
 # Sparse ray maps need not prove that every voxel on the task-level route is
 # known free; EGO performs local collision-free trajectory planning.
 min_known_free_path_ratio: 0.5

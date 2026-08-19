@@ -348,6 +348,12 @@ private:
     private_nh_.param("max_goal_vertical_distance_m",
                       config.max_goal_vertical_distance_m,
                       config.max_goal_vertical_distance_m);
+    private_nh_.param("min_goal_z_m",
+                      config.min_goal_z_m,
+                      config.min_goal_z_m);
+    private_nh_.param("max_goal_z_m",
+                      config.max_goal_z_m,
+                      config.max_goal_z_m);
     private_nh_.param("goal_switch_margin",
                       config.goal_switch_margin,
                       config.goal_switch_margin);
