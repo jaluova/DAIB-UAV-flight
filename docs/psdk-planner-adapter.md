@@ -69,3 +69,9 @@ g++ -std=c++14 -I src/DAIB-Planner/src/planner/psdk_velocity_adapter/include \
 ```
 
 注意：坐标轴正方向必须用实际 odometry 和 DJI 地面坐标做一次标定；在确认前不能直接把 planner 的 `x/y` 发送给飞机。
+
+现场只观察、不接飞机的完整流程见：
+
+```text
+docs/planner-adapter-dry-run-20260824.md
+```
