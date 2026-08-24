@@ -1,0 +1,26 @@
+<launch>
+  <arg name="command_topic" default="/daib_ego/position_cmd"/>
+  <arg name="odom_topic" default="/daib_slam/odom"/>
+  <arg name="output_topic" default="/psdk/velocity_command"/>
+  <arg name="output_frame" default="body"/>
+  <arg name="horizontal_limit_m_s" default="0.5"/>
+  <arg name="vertical_limit_m_s" default="0.2"/>
+  <arg name="yaw_limit_deg_s" default="10.0"/>
+  <arg name="stale_timeout_s" default="0.2"/>
+  <arg name="output_body_frame" default="true"/>
+
+  <node pkg="psdk_velocity_adapter"
+        type="psdk_velocity_adapter_node"
+        name="psdk_velocity_adapter"
+        output="screen">
+    <param name="command_topic" value="$(arg command_topic)"/>
+    <param name="odom_topic" value="$(arg odom_topic)"/>
+    <param name="output_topic" value="$(arg output_topic)"/>
+    <param name="output_frame" value="$(arg output_frame)"/>
+    <param name="horizontal_limit_m_s" value="$(arg horizontal_limit_m_s)"/>
+    <param name="vertical_limit_m_s" value="$(arg vertical_limit_m_s)"/>
+    <param name="yaw_limit_deg_s" value="$(arg yaw_limit_deg_s)"/>
+    <param name="stale_timeout_s" value="$(arg stale_timeout_s)"/>
+    <param name="output_body_frame" value="$(arg output_body_frame)"/>
+  </node>
+</launch>

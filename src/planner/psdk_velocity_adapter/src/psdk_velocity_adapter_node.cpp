@@ -70,7 +70,7 @@ int main(int argc, char **argv)
   std::string command_topic;
   std::string odom_topic;
   std::string output_topic;
-  private_nh.param<std::string>("command_topic", command_topic, "/position_cmd");
+  private_nh.param<std::string>("command_topic", command_topic, "/daib_ego/position_cmd");
   private_nh.param<std::string>("odom_topic", odom_topic, "/daib_slam/odom");
   private_nh.param<std::string>("output_topic", output_topic, "/psdk/velocity_command");
   private_nh.param<std::string>("output_frame", output_frame, "body");
