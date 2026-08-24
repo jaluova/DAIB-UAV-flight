@@ -203,6 +203,7 @@ docker compose --env-file deploy/.env \
 - [DAIB-Planner 集成接口](src/DAIB-Planner/docs/DAIB_INTEGRATION.md)
 - [Orange Pi 容器部署](deploy/README.md)
 - [Orange Pi 飞行、录包与回放快速说明](docs/flight-quickstart-README.md)
+- [Manifold 3 + DJI M400 PSDK 交接记录](docs/manifold3-m400-psdk-handoff-20260822.md)
 - [完整 PX4 数据链路](docs/px4-full-pipeline.md)
 - [MID-70 与 D435i 外参标定](docs/mid70-d435i-manual-extrinsic-calibration.md)
 
