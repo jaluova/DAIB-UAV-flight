@@ -1,0 +1,13 @@
+<?xml version="1.0"?>
+<package format="2">
+  <name>psdk_velocity_adapter</name>
+  <version>0.1.0</version>
+  <description>Converts planner PositionCommand velocity to bounded DJI-style commands.</description>
+  <maintainer email="unf01d@users.noreply.github.com">DAIB</maintainer>
+  <license>GPL-3.0-only</license>
+  <buildtool_depend>catkin</buildtool_depend>
+  <depend>geometry_msgs</depend>
+  <depend>nav_msgs</depend>
+  <depend>quadrotor_msgs</depend>
+  <depend>roscpp</depend>
+</package>
