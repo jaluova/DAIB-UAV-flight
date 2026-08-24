@@ -37,6 +37,28 @@ yaw_dji = yaw_dot * 180 / pi
 src/DAIB-Planner/src/planner/psdk_velocity_adapter/
 ```
 
+运行时链路默认已经对齐：
+
+```text
+/daib_ego/position_cmd -> psdk_velocity_adapter_node -> /psdk/velocity_command
+```
+
+启动转换节点：
+
+```bash
+roslaunch psdk_velocity_adapter adapter.launch
+```
+
+检查 planner 输出和转换结果：
+
+```bash
+rostopic echo /daib_ego/position_cmd
+rostopic echo /psdk/velocity_command
+```
+
+`/psdk/velocity_command` 仍然只是 `geometry_msgs/TwistStamped`，不会调用
+PSDK，也不会控制飞机。真正连接 PSDK 还需要单独的 Bridge。
+
 本地转换单元测试：
 
 ```bash
