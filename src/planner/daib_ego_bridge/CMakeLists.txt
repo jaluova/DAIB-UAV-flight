@@ -26,5 +26,7 @@ endif()
 
 install(TARGETS daib_ego_bridge_node
   RUNTIME DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION})
+install(PROGRAMS scripts/goal_altitude_bridge.py
+  DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION})
 install(DIRECTORY config launch
   DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION})

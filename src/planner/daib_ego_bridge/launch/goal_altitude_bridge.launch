@@ -1,0 +1,14 @@
+<launch>
+  <arg name="input_topic" default="/daib_ego/goal_raw"/>
+  <arg name="output_topic" default="/daib_ego/goal"/>
+  <arg name="odom_topic" default="/daib_slam/odom"/>
+
+  <node pkg="daib_ego_bridge"
+        type="goal_altitude_bridge.py"
+        name="goal_altitude_bridge"
+        output="screen">
+    <param name="input_topic" value="$(arg input_topic)"/>
+    <param name="output_topic" value="$(arg output_topic)"/>
+    <param name="odom_topic" value="$(arg odom_topic)"/>
+  </node>
+</launch>

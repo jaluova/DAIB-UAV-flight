@@ -71,6 +71,7 @@ namespace ego_planner
     double replan_failure_backoff_s_;
     double replan_from_odom_position_error_m_;
     double replan_from_odom_velocity_error_mps_;
+    double goal_reached_distance_m_;
     double active_traj_visualization_rate_hz_;
     double active_traj_sample_dt_s_;
     bool show_global_reference_;

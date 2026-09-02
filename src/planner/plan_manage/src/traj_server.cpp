@@ -4,8 +4,11 @@
 #include "quadrotor_msgs/PositionCommand.h"
 #include "std_msgs/Empty.h"
 #include "visualization_msgs/Marker.h"
+#include <algorithm>
+#include <cmath>
 #include <ros/ros.h>
 #include <string>
+#include <utility>
 
 ros::Publisher pos_cmd_pub;
 
@@ -25,6 +28,34 @@ int traj_id_;
 double last_yaw_, last_yaw_dot_;
 double time_forward_;
 std::string command_frame_id_;
+double max_yaw_rate_ = 3.0 * M_PI / 180.0;
+bool yaw_command_initialized_ = false;
+bool have_odom_yaw_ = false;
+
+double wrapYaw(double angle)
+{
+  while (angle > M_PI) angle -= 2.0 * M_PI;
+  while (angle <= -M_PI) angle += 2.0 * M_PI;
+  return angle;
+}
+
+void odomCallback(const nav_msgs::OdometryConstPtr &msg)
+{
+  const auto &q = msg->pose.pose.orientation;
+  const double norm = std::sqrt(q.x * q.x + q.y * q.y + q.z * q.z + q.w * q.w);
+  if (!std::isfinite(norm) || norm < 1e-6) return;
+  const double x = q.x / norm, y = q.y / norm;
+  const double z = q.z / norm, w = q.w / norm;
+  const double sin_yaw = 2.0 * (w * z + x * y);
+  const double cos_yaw = 1.0 - 2.0 * (y * y + z * z);
+  const double yaw = std::atan2(sin_yaw, cos_yaw);
+  if (!have_odom_yaw_) {
+    last_yaw_ = yaw;
+    last_yaw_dot_ = 0.0;
+    yaw_command_initialized_ = true;
+    have_odom_yaw_ = true;
+  }
+}
 
 void bsplineCallback(traj_utils::BsplineConstPtr msg)
 {
@@ -72,94 +103,33 @@ void bsplineCallback(traj_utils::BsplineConstPtr msg)
 
 std::pair<double, double> calculate_yaw(double t_cur, Eigen::Vector3d &pos, ros::Time &time_now, ros::Time &time_last)
 {
-  constexpr double PI = 3.1415926;
-  constexpr double YAW_DOT_MAX_PER_SEC = PI;
-  // constexpr double YAW_DOT_DOT_MAX_PER_SEC = PI;
-  std::pair<double, double> yaw_yawdot(0, 0);
-  double yaw = 0;
-  double yawdot = 0;
-
-  Eigen::Vector3d dir = t_cur + time_forward_ <= traj_duration_ ? traj_[0].evaluateDeBoorT(t_cur + time_forward_) - pos : traj_[0].evaluateDeBoorT(traj_duration_) - pos;
-  double yaw_temp = dir.norm() > 0.1 ? atan2(dir(1), dir(0)) : last_yaw_;
-  double max_yaw_change = YAW_DOT_MAX_PER_SEC * (time_now - time_last).toSec();
-  if (yaw_temp - last_yaw_ > PI)
-  {
-    if (yaw_temp - last_yaw_ - 2 * PI < -max_yaw_change)
-    {
-      yaw = last_yaw_ - max_yaw_change;
-      if (yaw < -PI)
-        yaw += 2 * PI;
-
-      yawdot = -YAW_DOT_MAX_PER_SEC;
-    }
-    else
-    {
-      yaw = yaw_temp;
-      if (yaw - last_yaw_ > PI)
-        yawdot = -YAW_DOT_MAX_PER_SEC;
-      else
-        yawdot = (yaw_temp - last_yaw_) / (time_now - time_last).toSec();
-    }
+  const double dt_raw = (time_now - time_last).toSec();
+  const double dt = std::isfinite(dt_raw) && dt_raw > 1e-4 && dt_raw <= 0.5
+                        ? dt_raw
+                        : 0.01;
+  const Eigen::Vector3d future =
+      t_cur + time_forward_ <= traj_duration_
+          ? traj_[0].evaluateDeBoorT(t_cur + time_forward_)
+          : traj_[0].evaluateDeBoorT(traj_duration_);
+  const Eigen::Vector3d dir = future - pos;
+  const double target = dir.norm() > 0.1
+                            ? std::atan2(dir(1), dir(0))
+                            : last_yaw_;
+  if (!yaw_command_initialized_) {
+    last_yaw_ = target;
+    last_yaw_dot_ = 0.0;
+    yaw_command_initialized_ = true;
   }
-  else if (yaw_temp - last_yaw_ < -PI)
-  {
-    if (yaw_temp - last_yaw_ + 2 * PI > max_yaw_change)
-    {
-      yaw = last_yaw_ + max_yaw_change;
-      if (yaw > PI)
-        yaw -= 2 * PI;
-
-      yawdot = YAW_DOT_MAX_PER_SEC;
-    }
-    else
-    {
-      yaw = yaw_temp;
-      if (yaw - last_yaw_ < -PI)
-        yawdot = YAW_DOT_MAX_PER_SEC;
-      else
-        yawdot = (yaw_temp - last_yaw_) / (time_now - time_last).toSec();
-    }
-  }
-  else
-  {
-    if (yaw_temp - last_yaw_ < -max_yaw_change)
-    {
-      yaw = last_yaw_ - max_yaw_change;
-      if (yaw < -PI)
-        yaw += 2 * PI;
-
-      yawdot = -YAW_DOT_MAX_PER_SEC;
-    }
-    else if (yaw_temp - last_yaw_ > max_yaw_change)
-    {
-      yaw = last_yaw_ + max_yaw_change;
-      if (yaw > PI)
-        yaw -= 2 * PI;
-
-      yawdot = YAW_DOT_MAX_PER_SEC;
-    }
-    else
-    {
-      yaw = yaw_temp;
-      if (yaw - last_yaw_ > PI)
-        yawdot = -YAW_DOT_MAX_PER_SEC;
-      else if (yaw - last_yaw_ < -PI)
-        yawdot = YAW_DOT_MAX_PER_SEC;
-      else
-        yawdot = (yaw_temp - last_yaw_) / (time_now - time_last).toSec();
-    }
-  }
-
-  if (fabs(yaw - last_yaw_) <= max_yaw_change)
-    yaw = 0.5 * last_yaw_ + 0.5 * yaw; // nieve LPF
-  yawdot = 0.5 * last_yaw_dot_ + 0.5 * yawdot;
+  // Publish the actual desired heading. The downstream adapter closes the
+  // loop against measured odometry and applies the aircraft's safe rate and
+  // acceleration limits. Keep yaw_dot bounded as diagnostic/feed-forward data.
+  const double error = wrapYaw(target - last_yaw_);
+  const double yaw = target;
+  const double yawdot = std::max(-std::abs(max_yaw_rate_),
+                                 std::min(error / dt, std::abs(max_yaw_rate_)));
   last_yaw_ = yaw;
   last_yaw_dot_ = yawdot;
-
-  yaw_yawdot.first = yaw;
-  yaw_yawdot.second = yawdot;
-
-  return yaw_yawdot;
+  return std::make_pair(yaw, yawdot);
 }
 
 void cmdCallback(const ros::TimerEvent &e)
@@ -238,6 +208,10 @@ int main(int argc, char **argv)
   ros::NodeHandle nh("~");
 
   ros::Subscriber bspline_sub = nh.subscribe("planning/bspline", 10, bsplineCallback);
+  std::string odom_topic;
+  nh.param<std::string>("traj_server/odom_topic", odom_topic,
+                        "/daib_slam/odom");
+  ros::Subscriber odom_sub = nh.subscribe(odom_topic, 10, odomCallback);
 
   pos_cmd_pub = nh.advertise<quadrotor_msgs::PositionCommand>("/position_cmd", 50);
 
@@ -253,6 +227,11 @@ int main(int argc, char **argv)
   cmd.kv[2] = vel_gain[2];
 
   nh.param("traj_server/time_forward", time_forward_, -1.0);
+  double max_yaw_rate_deg_s = 3.0;
+  nh.param("traj_server/max_yaw_rate_deg_s", max_yaw_rate_deg_s, max_yaw_rate_deg_s);
+  if (!std::isfinite(max_yaw_rate_deg_s) || max_yaw_rate_deg_s <= 0.0)
+    max_yaw_rate_deg_s = 3.0;
+  max_yaw_rate_ = max_yaw_rate_deg_s * M_PI / 180.0;
   nh.param<std::string>("traj_server/frame_id", command_frame_id_, "world");
   last_yaw_ = 0.0;
   last_yaw_dot_ = 0.0;

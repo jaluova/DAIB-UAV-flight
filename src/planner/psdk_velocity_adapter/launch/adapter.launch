@@ -5,9 +5,20 @@
   <arg name="output_frame" default="body"/>
   <arg name="horizontal_limit_m_s" default="0.5"/>
   <arg name="vertical_limit_m_s" default="0.2"/>
-  <arg name="yaw_limit_deg_s" default="10.0"/>
+  <arg name="yaw_limit_deg_s" default="3.0"/>
+  <arg name="yaw_accel_deg_s2" default="3.0"/>
+  <arg name="yaw_kp" default="0.5"/>
+  <arg name="yaw_deadband_deg" default="1.0"/>
   <arg name="stale_timeout_s" default="0.2"/>
+  <arg name="odom_timeout_s" default="0.5"/>
   <arg name="output_body_frame" default="true"/>
+  <arg name="odom_child_optical" default="true"/>
+  <arg name="body_yaw_offset_deg" default="0.0"/>
+  <arg name="dji_y_sign" default="-1.0"/>
+  <arg name="dji_yaw_sign" default="-1.0"/>
+  <arg name="udp_enabled" default="false"/>
+  <arg name="udp_host" default="127.0.0.1"/>
+  <arg name="udp_port" default="19090"/>
 
   <node pkg="psdk_velocity_adapter"
         type="psdk_velocity_adapter_node"
@@ -20,7 +31,18 @@
     <param name="horizontal_limit_m_s" value="$(arg horizontal_limit_m_s)"/>
     <param name="vertical_limit_m_s" value="$(arg vertical_limit_m_s)"/>
     <param name="yaw_limit_deg_s" value="$(arg yaw_limit_deg_s)"/>
+    <param name="yaw_accel_deg_s2" value="$(arg yaw_accel_deg_s2)"/>
+    <param name="yaw_kp" value="$(arg yaw_kp)"/>
+    <param name="yaw_deadband_deg" value="$(arg yaw_deadband_deg)"/>
     <param name="stale_timeout_s" value="$(arg stale_timeout_s)"/>
+    <param name="odom_timeout_s" value="$(arg odom_timeout_s)"/>
     <param name="output_body_frame" value="$(arg output_body_frame)"/>
+    <param name="odom_child_optical" value="$(arg odom_child_optical)"/>
+    <param name="body_yaw_offset_deg" value="$(arg body_yaw_offset_deg)"/>
+    <param name="dji_y_sign" value="$(arg dji_y_sign)"/>
+    <param name="dji_yaw_sign" value="$(arg dji_yaw_sign)"/>
+    <param name="udp_enabled" value="$(arg udp_enabled)"/>
+    <param name="udp_host" value="$(arg udp_host)"/>
+    <param name="udp_port" value="$(arg udp_port)"/>
   </node>
 </launch>

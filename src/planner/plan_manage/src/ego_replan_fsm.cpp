@@ -38,6 +38,7 @@ namespace ego_planner
              replan_from_odom_position_error_m_, 0.5);
     nh.param("fsm/replan_from_odom_velocity_error_mps",
              replan_from_odom_velocity_error_mps_, 0.8);
+    nh.param("fsm/goal_reached_distance_m", goal_reached_distance_m_, 0.8);
     nh.param("visualization/active_traj_rate_hz",
              active_traj_visualization_rate_hz_, 10.0);
     nh.param("visualization/active_traj_sample_dt_s",
@@ -54,6 +55,7 @@ namespace ego_planner
         std::max(0.0, replan_from_odom_position_error_m_);
     replan_from_odom_velocity_error_mps_ =
         std::max(0.0, replan_from_odom_velocity_error_mps_);
+    goal_reached_distance_m_ = std::max(0.1, goal_reached_distance_m_);
     active_traj_visualization_rate_hz_ =
         std::max(0.5, active_traj_visualization_rate_hz_);
     active_traj_sample_dt_s_ =
@@ -683,6 +685,26 @@ namespace ego_planner
       {
         if (t_cur > info->duration_ - 1e-2)
         {
+          // Do not declare the goal complete merely because the planned
+          // B-spline reached its endpoint.  The old code compared end_pt_
+          // with `pos`, which is sampled from that same B-spline and is
+          // therefore zero by construction at t=duration_.  If the real
+          // vehicle lagged behind, EGO cleared optimal_list and waited for
+          // Explorer to replace a goal that Explorer still considered
+          // active.  Replan from odometry until the vehicle is actually
+          // within the configured endpoint radius.
+          const double actual_goal_distance = (end_pt_ - odom_pos_).norm();
+          if (actual_goal_distance > goal_reached_distance_m_)
+          {
+            ROS_WARN_THROTTLE(
+                1.0,
+                "Trajectory endpoint reached but vehicle is still %.3f m "
+                "from goal (limit %.3f m); replanning.",
+                actual_goal_distance, goal_reached_distance_m_);
+            changeFSMExecState(REPLAN_TRAJ, "GOAL_TRACKING");
+            goto force_return;
+          }
+
           have_target_ = false;
           have_trigger_ = false;
           visualization_->clearTrajectoryMarkers();

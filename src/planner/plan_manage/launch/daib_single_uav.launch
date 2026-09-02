@@ -8,6 +8,8 @@
   <arg name="cloud_topic" default="/daib_explorer/planning_cloud"/>
   <arg name="planner_goal_topic" default="/daib_ego/goal"/>
   <arg name="position_cmd_topic" default="/daib_ego/position_cmd"/>
+  <arg name="yaw_odom_topic" default="/daib_slam/odom"/>
+  <arg name="max_yaw_rate_deg_s" default="3.0"/>
   <arg name="world_frame" default="camera_init"/>
 
   <!-- Resource-constrained defaults for the RK3588 single-UAV stage. -->
@@ -15,6 +17,7 @@
   <arg name="map_size_y" default="80.0"/>
   <arg name="map_size_z" default="20.0"/>
   <arg name="map_resolution" default="0.25"/>
+  <arg name="obstacles_inflation" default="0.5"/>
   <arg name="ground_height" default="-3.0"/>
   <arg name="virtual_ceil_height" default="16.0"/>
   <arg name="max_vel" default="2.0"/>
@@ -74,6 +77,8 @@
            value="0.5" type="double"/>
     <param name="fsm/replan_from_odom_velocity_error_mps"
            value="0.8" type="double"/>
+    <param name="fsm/goal_reached_distance_m"
+           value="0.8" type="double"/>
     <param name="fsm/manual_goal_expected_frame"
            value="$(arg world_frame)" type="string"/>
 
@@ -102,7 +107,8 @@
     <param name="grid_map/local_update_range_x" value="10.0" type="double"/>
     <param name="grid_map/local_update_range_y" value="10.0" type="double"/>
     <param name="grid_map/local_update_range_z" value="6.0" type="double"/>
-    <param name="grid_map/obstacles_inflation" value="0.5" type="double"/>
+    <param name="grid_map/obstacles_inflation"
+           value="$(arg obstacles_inflation)" type="double"/>
     <param name="grid_map/local_map_margin" value="4" type="int"/>
     <param name="grid_map/ground_height"
            value="$(arg ground_height)" type="double"/>
@@ -180,6 +186,10 @@
            to="/drone_$(arg drone_id)_planning/bspline"/>
     <remap from="/position_cmd" to="$(arg position_cmd_topic)"/>
     <param name="traj_server/time_forward" value="1.0" type="double"/>
+    <param name="traj_server/odom_topic"
+           value="$(arg yaw_odom_topic)" type="string"/>
+    <param name="traj_server/max_yaw_rate_deg_s"
+           value="$(arg max_yaw_rate_deg_s)" type="double"/>
     <param name="traj_server/frame_id"
            value="$(arg world_frame)" type="string"/>
   </node>

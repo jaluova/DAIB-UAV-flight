@@ -8,9 +8,11 @@ find_package(catkin REQUIRED COMPONENTS
   nav_msgs
   quadrotor_msgs
   roscpp
+  std_msgs
+  visualization_msgs
 )
 
-catkin_package(CATKIN_DEPENDS geometry_msgs nav_msgs quadrotor_msgs roscpp)
+catkin_package(CATKIN_DEPENDS geometry_msgs nav_msgs quadrotor_msgs roscpp std_msgs visualization_msgs)
 include_directories(include ${catkin_INCLUDE_DIRS})
 
 add_executable(psdk_velocity_adapter_node src/psdk_velocity_adapter_node.cpp)
