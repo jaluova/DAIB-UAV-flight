@@ -1,10 +1,14 @@
 <launch>
   <arg name="config" default="$(find daib_explorer)/config/explorer.yaml"/>
   <arg name="use_sim_time" default="false"/>
+  <arg name="use_fuel" default="true"/>
+  <arg name="fuel_obstacles_inflation_m" default="1.0"/>
+  <arg name="fuel_map_update_rate_hz" default="10.0"/>
   <arg name="odom_topic" default="/daib_slam/odom"/>
   <arg name="cloud_topic" default="/daib_slam/planning_cloud"/>
   <arg name="pvbsm_memory_enabled" default="true"/>
   <arg name="pvbsm_scoring_enabled" default="true"/>
+  <arg name="exploration_memory_restore" default="false"/>
   <arg name="min_goal_distance_m" default="1.5"/>
   <arg name="max_goal_distance_m" default="8.0"/>
   <arg name="max_goal_vertical_distance_m" default="3.0"/>
@@ -20,14 +24,15 @@
   <arg name="allow_periodic_goal_switch" default="false"/>
   <arg name="goal_timeout_s" default="0.0"/>
   <arg name="goal_blocked_confirm_updates" default="10"/>
-  <arg name="goal_reached_distance_m" default="0.5"/>
+  <arg name="goal_reached_distance_m" default="0.8"/>
   <arg name="goal_progress_epsilon_m" default="0.25"/>
-  <arg name="goal_stall_timeout_s" default="15.0"/>
+  <arg name="goal_stall_timeout_s" default="8.0"/>
   <arg name="failed_goal_exclusion_radius_m" default="1.0"/>
-  <arg name="failed_goal_cooldown_s" default="30.0"/>
+  <arg name="failed_goal_cooldown_s" default="5.0"/>
   <arg name="max_input_stamp_skew_s" default="0.2"/>
 
   <param name="/use_sim_time" value="$(arg use_sim_time)"/>
+  <group unless="$(arg use_fuel)">
   <node pkg="daib_explorer"
         type="daib_explorer_node"
         name="daib_explorer"
@@ -40,6 +45,8 @@
            value="$(arg pvbsm_memory_enabled)" type="bool"/>
     <param name="pvbsm_scoring_enabled"
            value="$(arg pvbsm_scoring_enabled)" type="bool"/>
+    <param name="exploration_memory_restore"
+           value="$(arg exploration_memory_restore)" type="bool"/>
     <param name="min_goal_distance_m"
            value="$(arg min_goal_distance_m)" type="double"/>
     <param name="max_goal_distance_m"
@@ -80,4 +87,17 @@
     <param name="max_input_stamp_skew_s"
            value="$(arg max_input_stamp_skew_s)" type="double"/>
   </node>
+  </group>
+
+  <group if="$(arg use_fuel)">
+    <include file="$(find fuel_goal_bridge)/launch/fuel_explorer.launch">
+      <arg name="odom_topic" value="$(arg odom_topic)"/>
+      <arg name="cloud_topic" value="$(arg cloud_topic)"/>
+      <arg name="obstacles_inflation_m" value="$(arg fuel_obstacles_inflation_m)"/>
+      <arg name="goal_vertical_limit_m" value="$(arg max_goal_vertical_distance_m)"/>
+      <arg name="goal_reached_distance_m" value="$(arg goal_reached_distance_m)"/>
+      <arg name="map_update_rate_hz" value="$(arg fuel_map_update_rate_hz)"/>
+      <arg name="exploration_memory_restore" value="$(arg exploration_memory_restore)"/>
+    </include>
+  </group>
 </launch>

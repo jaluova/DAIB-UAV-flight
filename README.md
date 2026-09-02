@@ -28,8 +28,8 @@ The internal schedule is deliberately multi-rate:
 | Stage | Default rate |
 |---|---:|
 | Occupancy integration and current-goal blocking check | 10 Hz |
-| Incremental dirty-frontier processing/publication | 2 Hz |
-| Goal candidate evaluation/replanning | 1 Hz |
+| Incremental dirty-frontier processing/publication | 10 Hz |
+| Goal candidate evaluation/replanning | 4 Hz |
 | Coarse trajectory-visit memory | 1 Hz |
 
 Mission-lifetime observation memory updates with every accepted cloud because
@@ -51,12 +51,17 @@ constraints; heading is retained as a soft rotation cost.
 Inside those bounds, information and PVBSM novelty are balanced against
 continuous distance and heading costs instead of hard preference tiers.
 
-Historical filtering is deployed in two phases. With the default
-`exploration_memory_filter_enabled: false`, Explorer records memory and reports
-how many clusters would be classified as historical without changing goal
-selection. After flight validation, enabling the filter removes clusters whose
-unknown-side probes are at least 70 percent stably observed. The raw valid
-cluster topic remains unchanged for before/after diagnosis.
+Historical filtering is enabled by default. Explorer removes clusters whose
+unknown-side probes are at least 70 percent stably observed across three or more
+cloud frames, preventing a rolling-map prune from recreating an already explored
+area. The raw valid cluster topic remains unchanged for diagnosis.
+
+The observation memory is snapshotted to
+`/tmp/daib-explorer-exploration-memory.bin` every 10 seconds. A normal launch
+starts a fresh mission and clears that file; the planning watchdog passes
+`exploration_memory_restore:=true` only when recovering a failed Explorer node.
+When `use_fuel:=true` (the current default launch path), the FUEL bridge uses
+the equivalent text snapshot `/tmp/daib-fuel-explored-frontiers.txt`.
 
 Vertical motion is limited relative to the current UAV pose rather than a
 fixed map altitude: with the default `max_goal_vertical_distance_m: 3.0`, a
@@ -65,8 +70,8 @@ does not impose an absolute altitude layer or a task-area geofence.
 
 The accepted goal follows a persistent FUEL-style task policy: it is not
 replaced merely because a higher-scoring frontier appears. Replacement occurs
-only after arrival, persistently blocked active-goal reachability, or 15 s
-without at least 0.25 m of progress. Blocked or stalled goals enter a 30 s
+only after arrival, persistently blocked active-goal reachability, or 8 s
+without at least 0.25 m of progress. Blocked or stalled goals enter a 5 s
 spatial cooldown so replanning cannot immediately select the same failed area.
 The old absolute `goal_timeout_s` is retained only for compatibility and is
 disabled by default.
@@ -120,7 +125,7 @@ yaw must be validated separately.
 DAIB-PVBSM runs on a separate low-rate subscriber callback. It stores
 versioned plane primitives and residual voxels by source/root identity, rejects
 stale updates, applies deletion records and groups roots into spatial
-submaps. At the 1 Hz goal-evaluation stage it rewards frontiers in unseen
+submaps. At the 4 Hz goal-evaluation stage it rewards frontiers in unseen
 submaps and penalizes candidates in well-covered submaps or already represented
 root voxels. During LiDAR degeneracy, nearby retained structure contributes a
 small observability-support bonus. It does not feed the 10 Hz collision map, so

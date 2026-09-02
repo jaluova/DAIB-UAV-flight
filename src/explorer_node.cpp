@@ -4,6 +4,8 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
+#include <cstdio>
+#include <fstream>
 #include <memory>
 #include <mutex>
 #include <stdexcept>
@@ -36,6 +38,11 @@ public:
     ExplorerConfig config;
     readParameters(config);
     core_ = std::make_unique<ExplorerCore>(config);
+    if (exploration_memory_restore_)
+      loadExplorationMemory();
+    else if (exploration_memory_persistence_enabled_ &&
+             !exploration_memory_file_.empty())
+      std::remove(exploration_memory_file_.c_str());
     if (pvbsm_memory_enabled_)
       pvbsm_memory_ = std::make_unique<PvbsmMemory>(
           static_cast<std::size_t>(pvbsm_memory_max_records_));
@@ -109,6 +116,12 @@ public:
                     << ", legacy_submap_memory=disabled");
   }
 
+  ~ExplorerNode()
+  {
+    if (exploration_memory_persistence_enabled_)
+      saveExplorationMemory();
+  }
+
 private:
   ros::NodeHandle nh_;
   ros::NodeHandle private_nh_;
@@ -177,6 +190,92 @@ private:
   uint8_t pvbsm_expected_submap_edge_roots_ = 8;
   bool ready_ = false;
   bool ready_initialized_ = false;
+  bool exploration_memory_persistence_enabled_ = true;
+  bool exploration_memory_restore_ = false;
+  std::string exploration_memory_file_ =
+      "/tmp/daib-explorer-exploration-memory.bin";
+  double exploration_memory_save_interval_s_ = 10.0;
+  ros::WallTime last_exploration_memory_save_;
+
+  void loadExplorationMemory()
+  {
+    if (exploration_memory_file_.empty()) return;
+    std::ifstream input(exploration_memory_file_, std::ios::binary);
+    if (!input) return;
+    uint32_t magic = 0;
+    uint32_t version = 0;
+    uint64_t count = 0;
+    input.read(reinterpret_cast<char *>(&magic), sizeof(magic));
+    input.read(reinterpret_cast<char *>(&version), sizeof(version));
+    input.read(reinterpret_cast<char *>(&count), sizeof(count));
+    constexpr uint32_t kMagic = 0x4441454dU;
+    constexpr uint32_t kVersion = 1U;
+    if (!input || magic != kMagic || version != kVersion || count > 5000000U)
+      return;
+    std::vector<ExplorationMemoryRecord> records;
+    records.reserve(static_cast<std::size_t>(count));
+    for (uint64_t index = 0; index < count; ++index)
+    {
+      ExplorationMemoryRecord record;
+      input.read(reinterpret_cast<char *>(&record.voxel.x),
+                 sizeof(record.voxel.x));
+      input.read(reinterpret_cast<char *>(&record.voxel.y),
+                 sizeof(record.voxel.y));
+      input.read(reinterpret_cast<char *>(&record.voxel.z),
+                 sizeof(record.voxel.z));
+      input.read(reinterpret_cast<char *>(&record.observations),
+                 sizeof(record.observations));
+      input.read(reinterpret_cast<char *>(&record.evidence),
+                 sizeof(record.evidence));
+      if (!input) return;
+      records.push_back(record);
+    }
+    core_->restoreExplorationMemory(records);
+    ROS_INFO_STREAM("[ DAIB Explorer ] restored " << records.size()
+                    << " exploration-memory cells from "
+                    << exploration_memory_file_);
+  }
+
+  void saveExplorationMemory()
+  {
+    if (!core_ || exploration_memory_file_.empty()) return;
+    const std::string temporary_file = exploration_memory_file_ + ".tmp";
+    std::ofstream output(temporary_file,
+                         std::ios::binary | std::ios::trunc);
+    if (!output) return;
+    constexpr uint32_t kMagic = 0x4441454dU;
+    constexpr uint32_t kVersion = 1U;
+    const std::vector<ExplorationMemoryRecord> records =
+        core_->explorationMemorySnapshot();
+    const uint64_t count = records.size();
+    output.write(reinterpret_cast<const char *>(&kMagic), sizeof(kMagic));
+    output.write(reinterpret_cast<const char *>(&kVersion), sizeof(kVersion));
+    output.write(reinterpret_cast<const char *>(&count), sizeof(count));
+    for (const ExplorationMemoryRecord &record : records)
+    {
+      output.write(reinterpret_cast<const char *>(&record.voxel.x),
+                   sizeof(record.voxel.x));
+      output.write(reinterpret_cast<const char *>(&record.voxel.y),
+                   sizeof(record.voxel.y));
+      output.write(reinterpret_cast<const char *>(&record.voxel.z),
+                   sizeof(record.voxel.z));
+      output.write(reinterpret_cast<const char *>(&record.observations),
+                   sizeof(record.observations));
+      output.write(reinterpret_cast<const char *>(&record.evidence),
+                   sizeof(record.evidence));
+    }
+    output.close();
+    if (!output)
+    {
+      std::remove(temporary_file.c_str());
+      return;
+    }
+    if (std::rename(temporary_file.c_str(), exploration_memory_file_.c_str()) !=
+        0)
+      std::remove(temporary_file.c_str());
+    else
+      last_exploration_memory_save_ = ros::WallTime::now();
+  }
 
   void readParameters(ExplorerConfig &config)
   {
@@ -234,6 +333,18 @@ private:
         "max_pvbsm_records_per_delta",
         max_pvbsm_records_per_delta_,
         max_pvbsm_records_per_delta_);
+    private_nh_.param("exploration_memory_persistence_enabled",
+                      exploration_memory_persistence_enabled_,
+                      exploration_memory_persistence_enabled_);
+    private_nh_.param("exploration_memory_restore",
+                      exploration_memory_restore_,
+                      exploration_memory_restore_);
+    private_nh_.param("exploration_memory_file",
+                      exploration_memory_file_,
+                      exploration_memory_file_);
+    private_nh_.param("exploration_memory_save_interval_s",
+                      exploration_memory_save_interval_s_,
+                      exploration_memory_save_interval_s_);
     map_update_rate_hz_ = std::max(0.2, map_update_rate_hz_);
     input_timeout_s_ = std::max(0.1, input_timeout_s_);
     ready_heartbeat_rate_hz_ = std::max(0.1, ready_heartbeat_rate_hz_);
@@ -246,6 +357,8 @@ private:
     pvbsm_memory_max_records_ = std::max(1, pvbsm_memory_max_records_);
     max_pvbsm_records_per_delta_ =
         std::max(1, max_pvbsm_records_per_delta_);
+    exploration_memory_save_interval_s_ =
+        std::max(1.0, exploration_memory_save_interval_s_);
 
     private_nh_.param("robot_id", config.robot_id, config.robot_id);
     private_nh_.param("planning_voxel_size_m",
@@ -791,6 +904,11 @@ private:
     core_->setHealth(degenerate, score, runtime);
     core_->update(position, orientation, points, timestamp);
     processed_cloud_sequence_ = cloud_sequence;
+    if (exploration_memory_persistence_enabled_ &&
+        (last_exploration_memory_save_.isZero() ||
+         (now - last_exploration_memory_save_).toSec() >=
+             exploration_memory_save_interval_s_))
+      saveExplorationMemory();
     publishReady(true);
 
     if (core_->stats().frontier_update_cycles != previous_frontier_cycle)

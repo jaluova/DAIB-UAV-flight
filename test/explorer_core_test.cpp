@@ -316,6 +316,28 @@ TEST(ExplorerCore, ExplorationMemoryDeduplicatesFramesAndSurvivesPruning)
             stable_before_prune);
 }
 
+TEST(ExplorerCore, ExplorationMemorySnapshotRestoresStableCells)
+{
+  ExplorerConfig config;
+  config.exploration_memory_enabled = true;
+  config.exploration_memory_min_observations = 2;
+  ExplorerCore source(config);
+  const std::vector<Vec3> points{{4.2, 0.0, 0.0}};
+  source.update({0.0, 0.0, 0.0}, {}, points, 1.0);
+  source.update({0.0, 0.0, 0.0}, {}, points, 2.0);
+
+  const std::vector<ExplorationMemoryRecord> snapshot =
+      source.explorationMemorySnapshot();
+  ASSERT_FALSE(snapshot.empty());
+
+  ExplorerCore restored(config);
+  restored.restoreExplorationMemory(snapshot);
+  EXPECT_EQ(restored.stats().exploration_memory_cells,
+            source.stats().exploration_memory_cells);
+  EXPECT_EQ(restored.stats().stable_exploration_memory_cells,
+            source.stats().stable_exploration_memory_cells);
+}
+
 TEST(ExplorerCore, EmptyCloudDoesNotCreateObservationMemory)
 {
   ExplorerConfig config;

@@ -1540,6 +1540,39 @@ std::vector<Vec3> ExplorerCore::selectedFrontierPoints() const
   return result;
 }
 
+std::vector<ExplorationMemoryRecord>
+ExplorerCore::explorationMemorySnapshot() const
+{
+  std::vector<ExplorationMemoryRecord> records;
+  records.reserve(exploration_memory_.size());
+  for (const auto &entry : exploration_memory_)
+    records.push_back(
+        {entry.first, entry.second.observations, entry.second.evidence});
+  return records;
+}
+
+void ExplorerCore::restoreExplorationMemory(
+    const std::vector<ExplorationMemoryRecord> &records)
+{
+  if (!config_.exploration_memory_enabled) return;
+  for (const ExplorationMemoryRecord &record : records)
+  {
+    if (record.observations == 0) continue;
+    ExplorationMemoryCell &cell = exploration_memory_[record.voxel];
+    cell.observations = std::max(cell.observations, record.observations);
+    cell.evidence |= record.evidence;
+  }
+  stats_.exploration_memory_cells = exploration_memory_.size();
+  stats_.stable_exploration_memory_cells =
+      static_cast<std::size_t>(std::count_if(
+          exploration_memory_.begin(), exploration_memory_.end(),
+          [this](const auto &entry)
+          {
+            return entry.second.observations >=
+                   config_.exploration_memory_min_observations;
+          }));
+}
+
 std::vector<Vec3> ExplorerCore::validClusterFrontierPoints() const
 {
   std::vector<Vec3> result;

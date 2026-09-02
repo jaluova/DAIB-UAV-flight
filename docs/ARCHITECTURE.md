@@ -34,15 +34,15 @@ PX4
 ```
 
 Within DAIB-Explorer, only occupancy integration and current-goal blockage
-checks follow the 10 Hz input. Dirty-frontier processing runs at 2 Hz, goal
-candidate evaluation at 1 Hz, and trajectory-visit maintenance at 1 Hz.
+checks follow the 10 Hz input. Dirty-frontier processing runs at 10 Hz, goal
+candidate evaluation at 4 Hz, and trajectory-visit maintenance at 1 Hz.
 Mission-lifetime observation memory reuses the bounded ray samples from each
 accepted cloud, with per-frame deduplication and a multi-frame stability
 threshold. Structural coverage and submap ownership come from PVBSM. These stages share
 one serialized core rather than independent worker threads, so rate separation
 does not introduce map races.
 
-PVBSM affects only the 1 Hz candidate score. Candidate positions are queried
+PVBSM affects only the 4 Hz candidate score. Candidate positions are queried
 as one batch under one short memory lock. The score continuously penalizes
 well-covered submaps and exact represented roots, rewards unseen submaps, and
 adds a bounded structural-support term during degeneracy. The rolling
@@ -55,7 +55,7 @@ heading/distance filter. Straight free segments require no graph search; only
 wall-occluded candidates invoke bounded A* over known-free planning voxels.
 Repeated selections of the same coarse frontier with little vehicle progress
 activate a temporary escape tier that blacklists recent clusters. These
-operations stay inside the 1 Hz goal stage and do not add work to FAST-LIVO2.
+operations stay inside the 4 Hz goal stage and do not add work to FAST-LIVO2.
 
 ## Four map layers
 
@@ -65,8 +65,10 @@ operations stay inside the 1 Hz goal stage and do not add work to FAST-LIVO2.
    changed. Per-update work is capped by `frontier_update_budget`.
 3. **Mission observation memory**: monotonic coarse cells that answer only
    whether an area was stably observed during this Explorer process. It is not
-   a collision map and is cleared on restart. Historical cluster filtering is
-   available but disabled by default for a statistics-only validation phase.
+   a collision map. The node snapshots it periodically and restores it only for
+   watchdog recovery; a normal mission launch starts with an empty snapshot.
+   Historical cluster filtering is enabled by default so rolling-map pruning
+   does not recreate old frontiers.
 4. **Structural exploration memory**: coarse visited trajectory cells plus
    DAIB-PVBSM. Its detailed plane/residual cache is bounded, while a compact
    per-submap observed-root bitmap survives detailed-record demotion. With the

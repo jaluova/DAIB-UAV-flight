@@ -38,7 +38,7 @@ pvbsm_memory_enabled: true
 pvbsm_memory_max_records: 200000
 max_pvbsm_records_per_delta: 2048
 
-# PVBSM long-term novelty term used only by 1 Hz frontier goal scoring.
+# PVBSM long-term novelty term used only by frontier goal scoring.
 # root_voxel_size must match FAST-LIVO2 lio/voxel_size, and submap_edge_roots
 # must match FAST-LIVO2 daib_pvbsm/submap_edge_roots.
 pvbsm_scoring_enabled: true
@@ -60,12 +60,12 @@ planning_map_radius_m: 40.0
 planning_prune_budget: 256
 max_raycasts_per_update: 128
 max_ray_steps: 64
-frontier_update_budget: 1024
-frontier_evaluation_budget: 1200
+frontier_update_budget: 2048
+frontier_evaluation_budget: 2400
 # Multi-rate scheduling: safety-relevant occupancy and blocked-goal checks run
 # on every accepted map update; the following heavier tasks run independently.
-frontier_update_rate_hz: 5.0
-goal_evaluation_rate_hz: 2.0
+frontier_update_rate_hz: 10.0
+goal_evaluation_rate_hz: 4.0
 long_term_update_rate_hz: 1.0
 
 # Low-frequency trajectory-visit memory used by frontier novelty scoring.
@@ -76,10 +76,15 @@ coverage_voxel_size_m: 2.0
 # Mission-lifetime observation memory. It reuses the already budgeted LiDAR
 # rays, deduplicates every cell within a cloud frame, and requires evidence
 # from three distinct frames before a 1 m cell becomes stable observed.
-# Keep filtering disabled for the first flight: validate monotonically growing
-# cells/stable counters and history ratios before allowing it to suppress goals.
+# Filter clusters whose unknown side has already been observed over multiple
+# frames, so rolling-map pruning cannot make the same area look unexplored.
 exploration_memory_enabled: true
-exploration_memory_filter_enabled: false
+exploration_memory_filter_enabled: true
+# Normal mission starts clear the process snapshot. Watchdog recovery passes
+# exploration_memory_restore:=true so a restarted node keeps the same mission.
+exploration_memory_persistence_enabled: true
+exploration_memory_file: /tmp/daib-explorer-exploration-memory.bin
+exploration_memory_save_interval_s: 10.0
 exploration_memory_voxel_size_m: 1.0
 exploration_memory_min_observations: 3
 exploration_memory_max_range_m: 20.0
@@ -96,11 +101,11 @@ goal_blocked_confirm_updates: 10
 # Deprecated compatibility switch. Zero disables absolute expiry; do not use
 # it together with the progress-based stall policy below.
 goal_timeout_s: 0.0
-goal_reached_distance_m: 0.5
+goal_reached_distance_m: 0.8
 goal_progress_epsilon_m: 0.25
-goal_stall_timeout_s: 15.0
+goal_stall_timeout_s: 8.0
 failed_goal_exclusion_radius_m: 1.0
-failed_goal_cooldown_s: 30.0
+failed_goal_cooldown_s: 5.0
 min_goal_distance_m: 1.5
 max_goal_distance_m: 8.0
 # Symmetric relative-height bound around the current UAV position:

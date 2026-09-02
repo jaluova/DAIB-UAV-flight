@@ -55,10 +55,10 @@ struct ExplorerConfig
   int planning_prune_budget = 256;
   int max_raycasts_per_update = 64;
   int max_ray_steps = 64;
-  int frontier_update_budget = 512;
-  int frontier_evaluation_budget = 1200;
-  double frontier_update_rate_hz = 2.0;
-  double goal_evaluation_rate_hz = 1.0;
+  int frontier_update_budget = 2048;
+  int frontier_evaluation_budget = 2400;
+  double frontier_update_rate_hz = 10.0;
+  double goal_evaluation_rate_hz = 4.0;
   double long_term_update_rate_hz = 1.0;
 
   double coverage_voxel_size_m = 2.0;
@@ -67,7 +67,7 @@ struct ExplorerConfig
   // collision map and PVBSM structural memory. It records only whether a
   // coarse cell has been observed consistently across different cloud frames.
   bool exploration_memory_enabled = true;
-  bool exploration_memory_filter_enabled = false;
+  bool exploration_memory_filter_enabled = true;
   double exploration_memory_voxel_size_m = 1.0;
   int exploration_memory_min_observations = 3;
   double exploration_memory_max_range_m = 20.0;
@@ -158,6 +158,13 @@ struct GoalDecision
   std::string reason = "not_initialized";
 };
 
+struct ExplorationMemoryRecord
+{
+  VoxelKey voxel;
+  uint16_t observations = 0;
+  uint8_t evidence = 0;
+};
+
 struct ExplorerStats
 {
   std::size_t free_cells = 0;
@@ -225,6 +232,9 @@ public:
   std::vector<Vec3> frontierPoints(std::size_t limit) const;
   std::vector<Vec3> validClusterFrontierPoints() const;
   std::vector<Vec3> selectedFrontierPoints() const;
+  std::vector<ExplorationMemoryRecord> explorationMemorySnapshot() const;
+  void restoreExplorationMemory(
+      const std::vector<ExplorationMemoryRecord> &records);
   uint64_t selectedClusterGeneration() const
   {
     return selected_cluster_generation_;
