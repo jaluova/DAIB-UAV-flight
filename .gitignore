@@ -4,6 +4,7 @@
 .agents/
 .claude/
 .codex/
+.zcode/
 .idea/
 .vscode/
 

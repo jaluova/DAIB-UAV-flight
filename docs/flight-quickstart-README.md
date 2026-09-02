@@ -122,6 +122,12 @@ Foxglove 连接 `ws://<香橙派Wi-Fi地址>:8765`，Fixed Frame 选择 `camera_
 
 ## 飞行录包
 
+完整探索流程（包括实际目标、EGO 局部轨迹和 DJI `{x,y,z,yaw}` 指令）的录包方案见：
+[`docs/exploration-run-recording-plan.md`](exploration-run-recording-plan.md)。
+
+`record_fast_livo_inputs.sh` 只录 FAST-LIVO 输入，适合传感器复盘，不足以保存一次实际
+探索的完整结果。
+
 正常 LIVO 启动通过后，在第二个 SSH 终端执行：
 
 ```bash

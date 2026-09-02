@@ -3,9 +3,9 @@
 	url = https://github.com/LBY-114514/DAIB-LIVO-flight.git
 [submodule "src/DAIB-Planner"]
 	path = src/DAIB-Planner
-	url = https://github.com/LBY-114514/DAIB-UAV-flight.git
+	url = https://github.com/jaluova/DAIB-UAV-flight.git
 	branch = submodules/daib-planner-flight
 [submodule "src/DAIB-Explorer"]
 	path = src/DAIB-Explorer
-	url = https://github.com/LBY-114514/DAIB-UAV-flight.git
+	url = https://github.com/jaluova/DAIB-UAV-flight.git
 	branch = submodules/daib-explorer-flight

@@ -1,0 +1,29 @@
+<launch>
+  <arg name="odom_topic" default="/daib_slam/odom"/>
+  <arg name="cloud_topic" default="/daib_slam/planning_cloud"/>
+  <arg name="obstacles_inflation_m" default="1.0"/>
+  <arg name="goal_vertical_limit_m" default="0.5"/>
+  <arg name="goal_reached_distance_m" default="0.8"/>
+  <arg name="map_update_rate_hz" default="10.0"/>
+  <arg name="explored_frontier_voxel_size_m" default="2.0"/>
+  <arg name="exploration_memory_restore" default="false"/>
+  <arg name="exploration_memory_file"
+       default="/tmp/daib-fuel-explored-frontiers.txt"/>
+  <arg name="map_resolution_m" default="0.5"/>
+  <node pkg="fuel_goal_bridge" type="fuel_goal_bridge_node" name="daib_explorer"
+        output="screen" respawn="false">
+    <param name="odom_topic" value="$(arg odom_topic)"/>
+    <param name="cloud_topic" value="$(arg cloud_topic)"/>
+    <param name="obstacles_inflation_m" value="$(arg obstacles_inflation_m)"/>
+    <param name="goal_vertical_limit_m" value="$(arg goal_vertical_limit_m)"/>
+    <param name="goal_reached_distance_m" value="$(arg goal_reached_distance_m)"/>
+    <param name="map_update_rate_hz" value="$(arg map_update_rate_hz)"/>
+    <param name="explored_frontier_voxel_size_m"
+           value="$(arg explored_frontier_voxel_size_m)"/>
+    <param name="exploration_memory_restore"
+           value="$(arg exploration_memory_restore)"/>
+    <param name="exploration_memory_file"
+           value="$(arg exploration_memory_file)"/>
+    <param name="map_resolution_m" value="$(arg map_resolution_m)"/>
+  </node>
+</launch>

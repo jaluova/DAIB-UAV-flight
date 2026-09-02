@@ -98,6 +98,14 @@ COPY src/DAIB-LIVO /opt/daib_ws/src/fast_livo
 COPY src/DAIB-Planner/src/planner /opt/daib_ws/src/ego_planner_packages
 COPY src/DAIB-Planner/src/uav_simulator/Utils/quadrotor_msgs /opt/daib_ws/src/quadrotor_msgs
 COPY src/DAIB-Explorer /opt/daib_ws/src/daib_explorer
+# FUEL exploration decision layer. Copy packages directly into catkin's source
+# root; the fuel_* names let them coexist with EGO's plan_env/path_searching.
+COPY src/FUEL/fuel_plan_env /opt/daib_ws/src/fuel_plan_env
+COPY src/FUEL/fuel_path_searching /opt/daib_ws/src/fuel_path_searching
+COPY src/FUEL/fuel_active_perception /opt/daib_ws/src/fuel_active_perception
+COPY src/FUEL/fuel_bspline /opt/daib_ws/src/bspline
+COPY src/FUEL/fuel_goal_bridge /opt/daib_ws/src/fuel_goal_bridge
+COPY src/FUEL/FUEL-LICENSE /opt/FUEL-LICENSE
 COPY deploy/patches/ego-planner-marker-single-point.patch /tmp/ego-planner-marker-single-point.patch
 
 # The BuildKit cache survives COPY invalidation and may contain object files

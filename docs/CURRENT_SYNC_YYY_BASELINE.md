@@ -87,8 +87,10 @@ rosparam get /vio/img_point_cov
 planning_output_radius_m: 12.0
 planning_sensor_range_m: 20.0
 max_raycasts_per_update: 128
-frontier_update_rate_hz: 5.0
-frontier_update_budget: 1024
+frontier_update_rate_hz: 10.0
+frontier_update_budget: 2048
+goal_evaluation_rate_hz: 4.0
+frontier_evaluation_budget: 2400
 ```
 
 这组参数现在就是默认 `explorer.yaml`，直接启动 Explorer 即可：
@@ -99,7 +101,7 @@ roslaunch daib_explorer explorer.launch \
   pvbsm_scoring_enabled:=false
 ```
 
-启动日志应显示 `budgets=128 rays/1024 frontier`。如果板端 LIO EMA 持续超过负载阈值，
+启动日志应显示 `budgets=128 rays/2048 frontier`。如果板端 LIO EMA 持续超过负载阈值，
 Explorer 自带的动态预算会进一步降低探索工作量。
 
 ## 2026-08-12 实机发现：来源 cluster 消失后旧 goal 仍有效
@@ -145,9 +147,9 @@ min_frontier_cluster_cells: 10
 BFS 本来就会访问整个连通分量，提高阈值不增加算法复杂度；日志中的
 `small_rejected` 现在表示大小为 1 到 9 的连通分量数量。
 
-## 待实现设计：Explorer 全局 exploration memory
+## Explorer 全局 exploration memory
 
-为避免局部 `map_` 在 40 m 外裁剪后把旧区域重新当成新 frontier，Explorer 后续维护
+为避免局部 `map_` 在 40 m 外裁剪后把旧区域重新当成新 frontier，Explorer 维护
 一份独立于 SLAM voxel/PVBSM 的任务期全局观测记忆。该记忆由 Explorer 已有 LiDAR
 raycast 同步更新，不受 12 m planning-cloud 输出裁剪和 40 m 局部地图裁剪影响。
 
@@ -171,7 +173,7 @@ std::unordered_map<VoxelKey, ExplorationCell, VoxelKeyHash>
 3. 终点后方保持 unknown，不写入记忆；
 4. 使用每帧 `frame_free_cells` 和 `frame_surface_cells` 去重，同一 cell 每帧最多加 1；
 5. 观测计数采用 `uint8_t` 饱和累加，至少 3 个不同帧才算稳定 observed；
-6. 第一版任务期间只增不减，Explorer 重启时清空，不写 NVMe。
+6. 任务期间只增不减；正常新任务清空，watchdog 故障恢复从 `/tmp` 快照恢复，不写 NVMe。
 
 建议初始参数：
 
@@ -180,6 +182,7 @@ exploration_memory_enabled: true
 exploration_memory_voxel_size_m: 1.0
 exploration_memory_min_observations: 3
 exploration_memory_max_range_m: 20.0
+exploration_memory_filter_enabled: true
 frontier_history_probe_distance_m: 4.0
 frontier_history_probe_step_m: 1.0
 frontier_history_observed_ratio: 0.7

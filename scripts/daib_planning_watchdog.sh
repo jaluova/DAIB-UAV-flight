@@ -6,7 +6,7 @@ set -Eeuo pipefail
 CONTAINER_ID="${1:?algorithm container id is required}"
 MODE="${2:-live}"
 USE_SIM_TIME="${3:-false}"
-GOAL_STALL_TIMEOUT_S="${4:-15.0}"
+GOAL_STALL_TIMEOUT_S="${4:-8.0}"
 MAX_VEL="${5:-0.5}"
 MAX_ACC="${6:-1.0}"
 ISOLATED_COMMAND_TOPIC="${7:-/daib_observe/position_cmd_unconnected}"
@@ -32,7 +32,7 @@ rm -f "$STATE_FILE"
 trap 'rm -f "$STATE_FILE"' EXIT
 
 launch_explorer() {
-  container "rosparam set /use_sim_time $USE_SIM_TIME; nohup roslaunch --screen daib_explorer explorer.launch use_sim_time:=$USE_SIM_TIME goal_stall_timeout_s:=$GOAL_STALL_TIMEOUT_S >$EXPLORER_LOG 2>&1 &"
+  container "rosparam set /use_sim_time $USE_SIM_TIME; nohup roslaunch --screen daib_explorer explorer.launch use_sim_time:=$USE_SIM_TIME exploration_memory_restore:=true goal_stall_timeout_s:=$GOAL_STALL_TIMEOUT_S >$EXPLORER_LOG 2>&1 &"
 }
 
 launch_ego() {

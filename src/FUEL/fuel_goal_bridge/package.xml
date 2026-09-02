@@ -1,0 +1,20 @@
+<?xml version="1.0"?>
+<package format="2">
+  <name>fuel_goal_bridge</name>
+  <version>0.1.0</version>
+  <description>FUEL frontier/viewpoint exploration bridge for the DAIB goal interface.</description>
+  <maintainer email="daib@example.com">DAIB</maintainer>
+  <license>GPL-3.0-or-later</license>
+  <buildtool_depend>catkin</buildtool_depend>
+  <depend>roscpp</depend>
+  <depend>geometry_msgs</depend>
+  <depend>nav_msgs</depend>
+  <depend>sensor_msgs</depend>
+  <depend>std_msgs</depend>
+  <depend>pcl_ros</depend>
+  <depend>pcl_conversions</depend>
+  <depend>fuel_plan_env</depend>
+  <depend>fuel_path_searching</depend>
+  <depend>fuel_active_perception</depend>
+  <depend>bspline</depend>
+</package>

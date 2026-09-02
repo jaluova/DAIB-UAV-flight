@@ -10,6 +10,7 @@ add_message_files(
   FILES
   Metadata.msg
   IMUInfo.msg
+  Extrinsics.msg
 )
 
 generate_messages(DEPENDENCIES std_msgs)
